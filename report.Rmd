@@ -1,0 +1,666 @@
+---
+title: "Toronto Major Crime Indicators - Clustering"
+author: "TALL Machine Learning - Zheng (James) Lai, Iman Lau, Dung Tran"
+date: "October 12, 2018"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+```{r warning=FALSE,message=FALSE}
+library(ggplot2)
+library(plyr)
+library(dplyr)
+library(Hmisc)
+library(ggpubr)
+library(DMwR)
+library(caret)
+library(pROC)
+model_dir = "models"
+data_dir = "data"
+#saved_models = list.files(model_dir)
+#for(file in saved_models) {
+#  load(paste(model_dir,file,sep="/"))
+#}
+data=read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
+```
+
+## I. Introduction
+
+The second assignment for the York Machine Learning course, *Machine Learning in Business Context* was to explore unsupervised machine learning algorithms, specifically clustering. We chose a dataset from the Toronto Police Sercive Public Safety Data Portal, [MCI 2014 to 2017](http://data.torontopolice.on.ca/datasets/mci-2014-to-2017). This report follows the structures laid out in CRISP-DM methodology.
+
+The GitHub repository for all the source code is located at the following link: [link here](link here).
+
+The RShiny app is located at the following link: [link here](link here).
+
+## II. Business Understanding
+
+The [Toronto Police Service](https://en.wikipedia.org/wiki/Toronto_Police_Service) is the police force that serves the Greater Toronto Area. It is the largest municipal police force in Canada, and the third largest police force in Canada. They are a taxpayer funded service, ranking as second for the government of Toronto's budgetary expenses. There is always 
+
+THe objective of this model is to cluster crimes to determine which areas of Toronto have the most levels of crime, overall and for different Major Crime Indicators. This would enable the Toronto Police to most effectively allocate their officers and specialists to the areas that require them the most. The hope is that this would be an effective way to lower crime rates and enable more cases to be solved, all without spending more money.
+
+There are some ethical implications of using crime data. There are many avenues for bias to enter the data set. Police services around North America have come under increased scrutiny in recent years for racist policing. Some police policies or laws inherently disadvantage certain groups of people, which would create bias in the data. This means that conclusions drawn from a machine learning model based on biased data would create biased results. The conclusions should be looked at with other data, such as demographic data, and supplementary information, such as social considerations.
+
+## III. Data Understanding
+
+The data set was provided courtesy of the [Toronto Police Service Open Data Portal](http://data.torontopolice.on.ca/). It is usable in accorance with the [Open Government License - Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
+
+The data concerns all Major Crime Indicators (MCI) occurences in Toronto by reported date, between 2014 and 2017. The MCIs are Assault, Break and Enter, Auto Theft, and Theft Over (excludes Sexual Assaults). Locations in the data set are approximate, as they have been deliberately offset to the nearest road intersection to protect the privacy of involved individuals. 
+
+There are 29 columns with 131,073 observations. However, 4 of these columns are duplicates, bringing us to 25 columns. Most of the columns
+
+There are both numeric and categorical attributes, and are further divided by client data, marketing details, and social/economic attributes.
+
+The following table shows the numeric attributes:
+
+
+Attribute    | Description
+-------------|------------------------------------------------------------------------
+age          | Age of client
+duration     | The duration of the last contact with the client for the current marketing campaign - as this is unknown before a call is made, and the end of the call will determine whether or not a client has signed up for the term deposit, this is a benchmarking attribute, and should be discarded if the intention is to have a realistic predictive model.
+campaign     | Number of contacts during the current campaign for that client
+pdays        | Number of days that have passed after the client has last been contacted, where "999" indicates the client was not previously contacted
+previous     | The number of contacts that were performed for the previous marketing campaign
+emp.var.rate | Employment variation rate - quarterly indicator
+
+While this table shows the categorical attributes:
+
+Attribute    | Description
+-------------|------------------------------------------------------------------------
+job          | Type of job - 12 options, including "unknown"
+marital      | Marital status - 4 options, including "unknown," where "divorced" means divorced or widowed
+education    | Education level - 8 options, including "unknown"
+default      | Does the client have credit in default? Yes or No, includes "unknown"
+housing      | Does the client have housing loan? Yes or No, includes "unknown"
+loan         | Does the client have personal loan? Yes or No, includes "unknown"
+contact      | Type of communication used to contact the client in this campaign - 2 options, "cellular", "telephone"
+month        | Month of last contact
+day_of_week  | Day of week of last contact
+poutcome     | Outcome of the previous marketing campaign - "failure", "nonexistent", "success"
+y            | target variable, has the client subscribed a term deposit? binary: 'yes','no'
+
+Firstly, we can quickly see that the data has `r table(data$y)[1]` negative labels ("no") and `r table(data$y)[2]` positive labels, indicating unbalanced dataset. It also tells us that if the bank bindly calls everyone to sell this term deposite, its success rate is only roughly `r round(table(data$y)[2]/table(data$y)[1]*100,2)`%. 
+
+Secondly, although there are no missing values in the raw dataset, certain categorical attributes have "unknown" and "nonexistent" as an option. To see how many "unknown"/"nonexistent" we have in the data, we replace "unknown" with "NA" and print the number of "NA"s for each column. Also we replaced "999" in "pdays" with "NA".
+
+```{r warning=FALSE,message=FALSE}
+data = read.csv(paste(data_dir,"bank-additional-full.csv",sep="/"), header = TRUE, sep = ";", na.strings = c("NA","","#NA","unknown","nonexistent"))
+data[data$pdays==999,"pdays"] = NA
+apply(data,2,function(x){sum(is.na(x))/length(x)*100})
+# restore the data
+data = read.csv(paste(data_dir,"bank-additional-full.csv",sep="/"), header = TRUE, sep = ";")
+```
+
+We can see that "pdays" and "poutcome" has particular high percentage of missing values(96% and 86% respectively). "default" also has about 20% missing values. We will come back to missing values in the next section.
+
+Next we will dive deep into data exploration and preparation.
+
+## IV. Data Exploration and Preparation
+
+### (1) Visualizations for client-related attributes
+
+These visuallizations serve as our first attempt to understand the influence over target variable ("y") by various features. Two features need minor attentions in order to best present its significance. One is "age", where we have cut the ages into different groups, with 10 years in each group, excepting the "teengagers," and "seniors." The other is "pdays" which has many "999" values, which indicates that the client was not previously contacted. This value was removed during visualization. 
+
+From these plots we can visually inspect the extent of influence of each feature over the target variable. For example, from the "age_group" plots, we see that young people and senior people seem to have a higher tendency to sign up the term deposit product. Conversely, attributes such as whether or not one has a personal loan, or if the contact was made with a telephone or cellular device, did not appear to have an effect.
+
+```{r warning=FALSE,message=FALSE}
+library(ggplot2)
+library(ggpubr)
+for (col in c("job","marital","education","default","housing","loan","contact","month","day_of_week","campaign","previous","poutcome")) {
+    p1 = ggplot(data, aes(data[,col], fill = y)) + geom_bar(position="fill") +
+      labs(x = "Target?", y = col) +
+      theme(axis.text.x=element_text(angle = -90, hjust = 0))
+    p2 = ggplot(data, aes(data[,col], fill = y)) + geom_bar() +
+      labs(x = "Target?", y = col) +
+      theme(axis.text.x=element_text(angle = -90, hjust = 0))
+    p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+    print(p3)
+}
+# Age effect
+data$age_group = cut2(data$age,c(20,30,40,50,60))
+data$age_group = mapvalues(data$age_group, from = levels(data$age_group), to = c("10s", "20s", "30s", "40s", "50s", "60s+"))
+p1 = ggplot(data,aes(x=age_group,fill=y)) + geom_bar(position="fill")
+p2 = ggplot(data,aes(x=age_group,fill=y)) + geom_bar()
+p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+print(p3)
+# pdays
+data[data$pdays == 999,]$pdays = NA 
+data = na.omit(data,pdays)
+p1 = ggplot(data,aes(x=pdays,fill=y)) + geom_bar(position="fill")
+p2 = ggplot(data,aes(x=pdays,fill=y)) + geom_bar()
+p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+print(p3)
+```
+
+### (2) Visualizations for the social/economic attributes
+
+After inspecting the attributes related to client's personal situations, we now look at the effect from macro-economic factors.
+
+```{r warning=FALSE,message=FALSE}
+for(colname in c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m")) {
+  df_temp = data.frame(table(data[,colname],data$y))
+  colnames(df_temp) =c(colname,"y","freq")
+  df_temp[,colname] = as.numeric(df_temp[,colname])
+  p1 = ggplot(df_temp, aes(x=df_temp[,colname], y=freq,fill=y)) + geom_area() + 
+    labs(x=colname,y="freq")
+  df_temp = data.frame(prop.table(table(data[,colname],data$y),1))
+  colnames(df_temp) =c(colname,"y","freq")
+  df_temp[,colname] = as.numeric(df_temp[,colname])
+  p2 = ggplot(df_temp, aes(x=df_temp[,colname], y=freq,fill=y)) + geom_area() + 
+    labs(x=colname,y="freq%")
+  p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+  print(p3)
+}
+```
+
+These visuals show that social and economic factors may have an effect on whether or not someone signs up for a term deposit. What is particularly interesting is the plots regarding "euribor3m". The Euro Interbank Offered Rate [(Euribor)](https://en.wikipedia.org/wiki/Euribor), is a "daily reference rate, published by the European Money Markets Institute, based on the averaged interest rates at which Eurozone banks offer to lend unsecured funds to other banks in the euro wholesale money market (or interbank market)". Interest rates rarely increase during a recession; in fact, the opposite tends to happen: as the economy contracts, [interest rates fall in tandem](https://www.investopedia.com/ask/answers/102015/do-interest-rates-increase-during-recession.asp#ixzz5TkhmrgLt). On the "euribor3m" plots, we can see that there is a rough trend that as "euribor3m" drops, the percentage of people who sign up for term deposit product actually increases. It also means our data would benefit by incoporating the macro-economic models.
+
+These social/economic attributes can be binned to create a more even distribution, and to reduce the effect from noise on model generalization.
+
+```{r warning=FALSE,message=FALSE}
+data$emp.var.rate.cat = factor(cut2(data$emp.var.rate,c(-1.8,-0.1)))
+data = select(data,-emp.var.rate)
+for(col in c("cons.conf.idx","cons.price.idx","euribor3m","nr.employed")) {
+  newCol = paste(col,".cat",sep="")
+  data[[newCol]]=factor(cut2(data[,col],c(quantile(data[,col], 0.25, na.rm=TRUE)[[1]],
+                                                   mean(data[,col]),
+                                                   quantile(data[,col], 0.75, na.rm=TRUE)[[1]])))
+  data = select(data,-col)
+}
+
+for(col in c("emp.var.rate.cat", "cons.price.idx.cat", "cons.conf.idx.cat", "euribor3m.cat", "nr.employed.cat")) {
+    p1 = ggplot(data, aes(data[,col], fill = y)) + geom_bar(position="fill") +
+      labs(x = "Target?", y = col) +
+      theme(axis.text.x=element_text(angle = -90, hjust = 0))
+    p2 = ggplot(data, aes(data[,col], fill = y)) + geom_bar() +
+      labs(x = "Target?", y = col) +
+      theme(axis.text.x=element_text(angle = -90, hjust = 0))
+    p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+    print(p3)
+}
+
+```
+
+### (3) Data outliers
+
+Box plots were created to see if there were any outliers that should be addressed.
+
+```{r warning=FALSE,message=FALSE}
+# box plot for all numeric input ~ y
+draw_box_plot = function() {
+  for (i in 1:(length(data)-1)) {
+    col = colnames(data)[i];
+    if(!is.numeric(data[,i])) next
+    p1 = ggplot(data, aes(x=y, y=data[,i])) + 
+      geom_boxplot(fill="slateblue", alpha=0.2) + 
+      xlab("Target?") + ylab(col)
+    p2 = ggplot(data, aes(x=data[,col],fill=y)) + geom_histogram() + xlab(col)
+    p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+    print(p3)
+  }
+}
+draw_box_plot()
+```
+
+As can be seen in the box plots, there were no worrisome outliers to address.
+
+### (4) Data correlations
+
+Next we will check correlations between all the columns to see if we can find any interesting observations:
+
+```{r warning=FALSE,message=FALSE}
+# Correlation of numeric columns; need to reload data b/c we have converted some of the numeric columns to factor earlier
+data=read.csv("data/bank-additional-full.csv", header = TRUE, sep = ";")
+data = data[,!colnames(data) %in% c("duration") ]
+library(Hmisc)
+library(corrplot)
+data = select(data,-y,y)
+data_num=data[,sapply(data, is.numeric)]
+data_num=cbind(data_num,y=as.integer(data$y))
+cor_result=rcorr(as.matrix(data_num))
+# Flattern
+flattenCorrMatrix <- function(cormat, pmat) {
+  ut <- upper.tri(cormat)
+  data.frame(
+    row = rownames(cormat)[row(cormat)[ut]],
+    column = rownames(cormat)[col(cormat)[ut]],
+    cor  =(cormat)[ut],
+    p = pmat[ut]
+  )
+}
+cor_result_flat = flattenCorrMatrix(cor_result$r, cor_result$P)
+cor_result_flat = cor_result_flat[order(cor_result_flat$cor,decreasing = TRUE),]
+print(cor_result_flat[cor_result_flat$column=="y",])
+library(ggcorrplot)
+ggcorrplot(cor_result$r, hc.order = TRUE, 
+           type = "lower", 
+           lab = TRUE, 
+           lab_size = 3, 
+           method="circle", 
+           colors = c("tomato2", "white", "springgreen3"), 
+           title="Correlogram of data_num", 
+           ggtheme=theme_bw)
+```
+
+We can see that the social/economic attributes are correlated with each other. In terms of correlations between the predictors and target variable, "previous" and "nr.employed" have the biggest correlation coefficients; however even these two coefficients are not that significant.
+
+### (5) Possible inconsistencies in data
+```{r warning=FALSE,message=FALSE}
+## Some inconsistencies in data
+data=read.csv("data/bank-additional-full.csv", header = TRUE, sep = ";") #reloading due to above code made some changed to pdays
+df_pdays = data[,c("pdays","previous","poutcome")]
+df_pdays = df_pdays[df_pdays$pdays==999,]
+table(df_pdays$previous)
+table(df_pdays$poutcome)
+```
+
+We can see that there is a bit of inconsistency with the previous marketing campaign. Looking at all instances of "999" pdays, i.e. client was not previously contacted, there are 35,563 instances of 0 contacts performed prior to the current campaign, which lines up with the number of "nonexistent" contacts. However, there are also 4110 "failures" which have some number of prior contact attempts.
+
+We have no way to find out what the true data is. To avoid using inconsistent data that cannot be verified, we simply consolidate pdays into a factor to show whether a client was previously contacted before or not.
+
+```{r warning=FALSE,message=FALSE}
+data$pdays_cat = factor(ifelse(data$pdays!=999,"contacted_before","not_contacted_before"))
+data = select(data,-pdays)
+```
+
+### (6) Data Preprocessing
+Now back to the "unknown"/"nonexistent" entries. Alghought not shown here, an experiment has been carried out to:
+(1) Use knn imputation to filled the missing entries for the columns that have just a few percentage of missing data;
+(2) Remove columns that have substantial amount of missing entries (such as "pdays").
+After these two steps a glm models are fitted to see if we can get any improvements, as compared to treating "unknown" as a seperate categories.
+
+However, we have not seen much improvements by step (1) & (2). Therefore we have decided to:
+(1) Just treat the "pdays" columns due to inconsistencies discovered earlier in this section;
+(2) Leave "unknown"/"nonexistent" as a seperate categories during modeling.
+
+The following code documents the preprocessing done on the dataset, based on the data exploration done in this section.
+
+```{r warning=FALSE,message=FALSE}
+#reloads data and runs preparation again
+data=read.csv("data/bank-additional-full.csv", header = TRUE, sep = ";")
+data = data[,!colnames(data) %in% c("duration") ]
+data$age_group = cut2(data$age,c(20,30,40,50,60))
+data$age_group = mapvalues(data$age_group, from = levels(data$age_group), to = c("teens", "20s", "30s", "40s", "50s", "seniors"))
+data = data[,colnames(data) != "age"]
+data$pdays_cat = factor(ifelse(data$pdays!=999,"contacted_before","not_contacted_before"))
+data = select(data,-pdays)
+data$campaign_cat = factor(ifelse(data$campaign>3 , ">3",data$campaign))
+data = select(data,-campaign)
+data$emp.var.rate.cat = factor(cut2(data$emp.var.rate,c(-1.8,-0.1)))
+data = select(data,-emp.var.rate)
+for(col in c("cons.conf.idx","cons.price.idx","euribor3m","nr.employed")) {
+  newCol = paste(col,".cat",sep="")
+  data[[newCol]]=factor(cut2(data[,col],c(quantile(data[,col], 0.25, na.rm=TRUE)[[1]],
+                                                   mean(data[,col]),
+                                                   quantile(data[,col], 0.75, na.rm=TRUE)[[1]])))
+  data = select(data,-col)
+}
+data = select(data,-y,y)
+```
+
+Split into test and train:
+
+```{r warning=FALSE,message=FALSE}
+set.seed(42)
+split = createDataPartition(data$y, times = 1, p=0.25, list = F)
+train = data[split,]
+test = data[-split,]
+train_x = train[,names(train)!="y"]
+train_y = train$y
+folds <- createFolds(train_y, k = 5)
+myControl <- trainControl(
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE,
+  savePredictions = TRUE,
+  index = folds,
+  verboseIter = F
+)
+```
+
+## V. Modeling
+
+With this preparation in mind, we can now start looking at models. 
+
+### (1) Generalized Linear Model with Stepwise Feature Selection
+
+```{r}
+if(!exists("model_glm_stepAIC")) {
+  model_glm_stepAIC <- caret::train(
+  y ~ ., train,
+  metric = "ROC",
+  method = "glmStepAIC",
+  trControl = myControl
+)
+}
+model_glm_stepAIC
+summary(model_glm_stepAIC)
+```
+
+### (2) Classification Tree
+
+```{r}
+if(!exists("model_rpart")) {
+  model_rpart <- train(
+  y ~ ., train,
+  metric = "ROC",
+  method = "rpart",
+  trControl = myControl,
+  tuneGrid = expand.grid(
+    cp = seq(0,0.01,0.001)
+  )
+)
+}
+plot(model_rpart)
+```
+
+### (3) Naive Bayes
+
+```{r}
+if(!exists("model_nb")) {
+  model_nb <- train(
+  y ~ ., train,
+  metric = "ROC",
+  method = "naive_bayes",
+  trControl = myControl
+)
+}
+plot(model_nb)
+```
+
+### (4) Generalized Linear Model (glmnet):
+
+```{r}
+if(!exists("model_glmnet")) {
+  model_glmnet <- caret::train(
+  y ~ ., train,
+  metric = "ROC",
+  method = "glmnet",
+  tuneGrid = expand.grid(
+    alpha = c(0,1),
+    lambda = 10:0/50
+  ),
+  trControl = myControl
+)
+}
+plot(model_glmnet)
+```
+
+### (5) glmnet with PCA preprocessing
+
+```{r}
+if(!exists("model_glmnet_pca")) {
+  model_glmnet_pca <- train(
+    y ~ ., train,
+    metric = "ROC",
+    method = "glmnet",
+    tuneGrid = expand.grid(
+      alpha = c(0,1),
+      lambda = 10:0/50
+    ),
+    trControl = myControl,
+    preProcess = c("zv", "nzv","center","scale","pca")
+  )
+}
+plot(model_glmnet_pca)
+```
+
+### (6) glmnet with manual feature selection:
+
+The step to manually select features are:
+
+1. Run glm models on the dataset. 
+2. Exclude the features that the glm models consider having high P value.
+3. Rerun glmnet models using the resulting features after step 2.
+
+Steps 1 and 2 are not shown here. Only the results for step 3 is shown.
+
+```{r}
+if(!exists("model_glmnet_mannual_feature_selection")) {
+  model_glmnet_mannual_feature_selection <- caret::train(
+  y ~ .-loan-education-marital-housing-age_group-job-emp.var.rate.cat-previous-default, train,
+  metric = "ROC",
+  method = "glmnet",
+  tuneGrid = expand.grid(
+    alpha = c(0,1),
+    lambda = 10:0/50
+  ),
+  trControl = myControl
+)
+}
+plot(model_glmnet_mannual_feature_selection)
+```
+
+### (7) Random Forest
+
+```{r}
+if(!exists("model_rf")) {
+  model_rf <- caret::train(
+  y ~ ., train,
+  metric = "ROC",
+  method = "ranger",
+  importance = 'impurity',
+  trControl = myControl,
+  tuneGrid = expand.grid(
+    mtry = seq(1,10,1),
+    splitrule = c("gini","extratrees"),
+    min.node.size = c(1)
+  )
+)
+}
+plot(model_rf)
+```
+
+### (8) Model stacking 
+
+As a experiement, what if we stack two levels of models? The idea is as follows:
+
+1.  Train two models in the 1st level: one using features only related to client's personal information; and one using only micro-economic features.
+2. Use the outcome from level 1 and train another model.
+
+This is "model stacking". In order to prevent overfitting, we further split the training data into two sets. The first set is used for level 1 training and the second is used for level 2 traning.
+
+```{r}
+# Model stacking
+# Two level of modelling; need to use two different datasets for two models in order to avoid overfit
+split_train = createDataPartition(train$y, times = 1, p=0.5, list = F)
+train_level1 = train[split_train,]
+train_level2 = train[-split_train,]
+folds_level1 <- createFolds(train_level1$y, k = 5)
+level1_control <- trainControl(
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE,
+  savePredictions = "final",
+  index = folds_level1,
+  verboseIter = F
+)
+
+formula_personal = y~job+marital+education+default+housing+contact+month+day_of_week+
+                    previous+poutcome+age_group+pdays_cat+campaign_cat
+formula_macro = y~emp.var.rate.cat+cons.conf.idx.cat+cons.price.idx.cat+euribor3m.cat+nr.employed.cat
+model_personal <- caret::train(
+  formula_personal, train_level1,
+  metric = "ROC",
+  method = "ranger",
+  trControl = level1_control
+)
+model_macro <- caret::train(
+  formula_macro, train_level1,
+  metric = "ROC",
+  method = "glmnet",
+  trControl = level1_control
+)
+resamp = resamples(list(personal=model_personal,macro=model_macro))
+# Show level 1 performance
+summary(resamp,metric="ROC")
+xyplot(resamp)
+```
+
+However, as the "ROC" plots have shown, the level 1 predictions ("personal" vs "macro") are not that uncorrelated, a hint that the stacking models may not perform exceptionally well. The following code documents the training of level 2 models.
+
+```{r}
+train_level2[["personal_pred"]] = predict(model_personal, train_level2, type = "prob")[,2]
+train_level2[["macro_pred"]] = predict(model_macro, train_level2, type = "prob")[,2]
+train_level2 = select(train_level2,-y,y)
+folds_level2 <- createFolds(train_level2$y, k = 5)
+level2_control <- trainControl(
+  summaryFunction = twoClassSummary,
+  classProbs = TRUE,
+  savePredictions = "final",
+  index = folds_level2,
+  verboseIter = F
+)
+
+model_stack <- caret::train(
+  y~personal_pred*macro_pred, train_level2,
+  metric = "ROC",
+  method = "glm",
+  trControl = level2_control
+)
+summary(model_stack)
+model_stack
+```
+
+We can visuallize what the level 1 predictions look like. Note that the predictions are probabilities. 
+
+```{r}
+# What the two level 1 prediction look like?
+for (i in (length(train_level2)-3):(length(train_level2)-1)) {
+    col = colnames(train_level2)[i];
+    if(!is.numeric(train_level2[,i])) next
+    p1 = ggplot(train_level2, aes(x=y, y=train_level2[,i])) + 
+      geom_boxplot(fill="slateblue", alpha=0.2) + 
+      xlab("Target?") + ylab(col)
+    p2 = ggplot(train_level2, aes(x=train_level2[,col],fill=y)) + geom_histogram() + xlab(col)
+    p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = TRUE)
+    print(p3)
+  }
+```
+
+## VI. Evaluation
+
+To evaluate which model performs the best, we can create a dot plot to see which model had the best ROC.
+
+Note that the resampling index for the stacked models are actually different than the other models. As previously mentioned, the training set was further divided into two partts, used in level 1 and level 2 training accordingly. Thus the performance of the stacking models is not a direct comparison with the other models. 
+
+```{r}
+model_list = list(rf=model_rf,
+                  glmnet=model_glmnet,
+                  glmnet_pca=model_glmnet_pca,
+                  glmnet_manual_feature=model_glmnet_mannual_feature_selection,
+                  rpart=model_rpart,
+                  nb=model_nb, 
+                  glm_stepAIC=model_glm_stepAIC,
+                  stack=model_stack
+                  )
+resamps <- resamples(model_list)
+summary(resamps, metric = "ROC")
+dotplot(resamps, metric = "ROC")
+```
+
+With this, we can see that glmnet with manual feature selection is the best performer---glmnet is simple yet powerful.
+
+We can also plot the ROC curve on the training set. We see the AUC for test set is not far from what is reported from cross-validation, indicating good generalization.
+
+```{r}
+best_model = model_glmnet_mannual_feature_selection
+# Evaluate on the test set
+p = predict(best_model, test, type = "prob")[,2]
+plot.roc(test$y,p,print.auc=T)
+```
+
+To further evaluate the model, we can take a look at the return on investment (ROI) for this bank marketing campaign. The idea was inspired by GitHub user [kurakura0916](https://github.com/kurakura0916) and their own attempt at this same dataset. If we assume that each call costs $10 to make, but each customer who converts is worth $20, ROI is calculated as follows:
+
+__ROI = 20 * # of sales - 10 * # of calls__
+
+The output of the models are probabilities. At what threshold of the probabilities can we yield maximum ROI? The following plots illustrate ROI vs. threshold:
+
+```{r}
+# Use cross validation to determine the threshold inorder to generate greatest ROI
+# The idea is inspired by: https://github.com/kurakura0916/bank_marketing
+# ROI = Number of Acquired Customer * 20 - 10 * Number of Calls
+library(rlist)
+roi_list = list()
+max_roi_vec = c()
+max_thres_vec = c()
+for (fold in folds) {
+  cvdata = train[fold,]
+  p = predict(best_model, cvdata, type = "prob")[,2]
+  roi = data.frame(thres=c(),roi=c())
+  for(thres in seq(0.15,1,0.01)) {
+    pred = ifelse(p>thres,"yes","no")
+    cost = 10 * sum(pred=="yes")
+    gain = 20 * sum(cvdata$y=="yes" & pred=="yes")
+    roi<-rbind(roi, data.frame(thres=thres, roi=gain-cost))
+  }
+  roi_list = list.append(roi_list,roi)
+  max_roi_vec = c(max_roi_vec,max(roi$roi))
+  max_thres_vec = c(max_thres_vec,roi$thres[which.max(roi$roi)])
+}
+max_roi_mean = mean(max_roi_vec)
+max_thres_mean = mean(max_thres_vec)
+ggplot(roi_list[[1]],aes(x=thres,y=roi)) + 
+  geom_line() + 
+  geom_line(data=roi_list[[2]],color="red") + 
+  geom_line(data=roi_list[[3]],color="green") +
+  geom_line(data=roi_list[[4]],color="purple") + 
+  geom_line(data=roi_list[[5]],color="yellow") + 
+  labs(title ="Decision Threshold vs ROI", x = "threshold(0~100%)", y = "ROI") + 
+  annotate("text", x = 0.9, y = max_roi_mean, 
+           label = c(paste("Max ROI mean:",max_roi_mean,"\nthreshold mean:",max_thres_mean)) , color="orange", size=5 , angle=0)
+
+# On test set:
+p = predict(best_model, test, type = "prob")[,2]
+pred = ifelse(p>max_thres_mean,"yes","no")
+cost = 10 * sum(pred=="yes")
+gain = 20 * sum(test$y=="yes" & pred=="yes")
+confusionMatrix(as.factor(ifelse(p>max_thres_mean,"yes","no")),test$y,mode="prec_recall")
+```
+
+Under the ROI foumular we have assumed, if we use predictive models, bank would make \$`r gain - cost`. If the bank just simply calls everyone, the bank would make \$`r 20 * sum(test$y=="yes") - 10 * dim(test)[1]`! The marketing campaign would lose money, which is the exact opposite effect that a marketing campaign should have. 
+
+Finally, for our own edification, we can also plot the importance of variables to see how our best model has ranked the attributes that were used to train it:
+
+```{r}
+library(ggthemes)
+imp    <- varImp(best_model)$importance
+varImportance <- data.frame(Variables = row.names(imp), 
+                            Importance = imp$Overall)
+# Create a rank variable based on importance
+rankImportance <- varImportance %>%
+  mutate(Rank = paste0('#',dense_rank(desc(Importance))))
+rankImportance = rankImportance[order(rankImportance$Importance,decreasing = T),]
+rankImportance = rankImportance[1:10,]
+# Use ggplot2 to visualize the relative importance of variables
+ggplot(rankImportance, aes(x = reorder(Variables, Importance), 
+                           y = Importance, fill = Importance)) +
+  geom_bar(stat='identity') + 
+  geom_text(aes(x = Variables, y = 0.5, label = Rank),
+            hjust=0, vjust=0.55, size = 4, colour = 'red') +
+  labs(x = 'Variables') +
+  coord_flip() + 
+  theme_few()
+```
+
+## Deployment
+
+An R Shiny dashboard was created and [uploaded to shinyapps](https://superstellar.shinyapps.io/BankMarketing-master/). It provides a more intuitive and visual look into the models that were built. A business analyst or marketing manager can take a look at the dashboard and draw their own conclusions about which factors are relevant and which are not. They can also explore the various models.
+
+Additionally, recall the ROI formula we have previously asssumed:
+**ROI = 20 * # of sales - 10 * # of calls**
+
+We have assumed the profit from each sale is \$20 and the cost for each call is \$10. What if the profit/cost ratio changes? This becomes a cost-volumn-profit analysis, which would be of great interest to those running a similar marketing campaign. An interactive ROI page has been included in the R Shiny dashboard where users can enter their own cost and profit numbers to see the maximum ROI under the assumptions they have provided. Interestingly, if the cost is sufficiently low, the model suggests a very low probability threshold, indicating that the bank may as well just call everyone.
+
+Base on the merit and drawback of predictive modelling so far, if a bank would deploy such data product, it would need to:   
+(1) Collect data on an on-going basis;   
+(2) Collect more features and experiment if additional features could furthur drive up prediction accuracy;   
+(3) Establish a way to evaluate source of data inconsistencies during data collection activities;   
+(4) Rerun modelling on a timely manner, possiblely on a daily basis.   
+(5) And last but not the least, conduct a thourough cost analysis to capture the true ROI formula.   
+
+## Conclusions
+
+We can see that a classification model built for predicting whether a client will sign up for a term deposit has some real world application. In addition to being used to decide which clients to call, it can also be used in the planning phase. For example, if one could have a high ROI, it would be worth spending more money on the marketing campaign, but if the ROI is low, then it might be better use that marketing budget elsewhere.
+
+An improvement that could be made in the future---especially with respect to ROI---is to consider that there was an attribute in the dataset for number of contacts made before a client converted. Each call has a certain cost associated with it, so a more sophisticated ROI analysis would include this. While our best-performing model didn't include this attribute as an important attribute, it could be interesting to explore in the future.
+
+Speaking of the best performing model, we determined that glmnet with manual feature selection was the best performer. This shows that manual feature selection/feature engineering, and thus humans making decisions, is still an important aspect of model creation. A simple and effective model provided an elegant solution to our problem.
