@@ -8,13 +8,10 @@ data <- subset(data, !duplicated(data$event_unique_id))
 
 #remove columns that aren't useful/duplicates
 #duplicates of other columns
-data <- data[, -(1:4)]
 #UCR codes - not used in this case
-data <- data[, -(4:5)]
 #ID number - not needed
-data <- data[, -23]
 #Hood ID - not needed
-data <- data[, -19]
+data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID","Hood_ID")]
 
 #formatting dates - remove garbage time values at the end
 data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
@@ -39,18 +36,17 @@ data$occurrencedayofyear[NAdata] <- yday(data$occurrencedate[NAdata])
 #data$daysbtwn <- data$reporteddate - data$occurrencedate
 
 #change things to factors
-data$reportedyear <- as.factor(data$reportedyear)
-data$reportedday <- as.factor(data$reportedday)
-data$reporteddayofyear <- as.factor(data$reporteddayofyear)
-data$reportedhour <- as.factor(data$reportedhour)
-data$occurrenceyear <- as.factor(data$occurrenceyear)
-data$occurrenceday <- as.factor(data$occurrenceday)
-data$occurrencedayofyear <- as.factor(data$occurrencedayofyear)
-data$occurrencehour <- as.factor(data$occurrencehour)
+for(col in c("reportedyear","reportedday","reporteddayofyear","reportedhour","occurrenceyear","occurrenceday",
+             "occurrencedayofyear","occurrencehour")) {
+  data[,col] = as.factor(data[,col])
+}
 
 #drop unused factor levels
-data$occurrencedayofweek <- droplevels(data$occurrencedayofweek)
-data$occurrencemonth <- droplevels(data$occurrencemonth)
+for(col in names(data)) {
+  if(is.factor(data[,col])) {
+    data[,col] = droplevels(data[,col])
+  }
+}
 
 #write CSV for use elsewhere
-write.csv(data, file.choose())
+#write.csv(data, file.choose())
