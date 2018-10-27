@@ -6,8 +6,6 @@
 # 
 #    http://shiny.rstudio.com/
 #
-
-library(shiny)
 library(ggplot2)
 library(dplyr)
 library(ggpubr)
@@ -23,13 +21,11 @@ library(DMwR)
 library(ggthemes)
 library(glmnet)
 library(e1071)
-library(ggplot2)
 library(viridis)
 library(tidyr)
 library(cluster)
 library(ggmap)
 library(maps)
-
 ### data initial loading
 model_dir = "models"
 data_dir = "data"
@@ -40,18 +36,19 @@ data_initial=read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = T
 toronto <- subset(data_initial, !duplicated(data_initial$event_unique_id))
 toronto <- subset(toronto, !is.na(toronto$occurrenceyear))
 toronto <- subset(toronto, !is.na(toronto$offence))
+toronto <- subset(toronto, !(is.na(toronto$occurrencedayofweek) | toronto$occurrencedayofweek == ""))
 neighbourhoods  <-  unique(toronto$Neighbourhood)
-
+sort(neighbourhoods)
 
 shinyServer(function(input, output,session) {
   
   updateSelectInput(session, "neighbourhood", choices = neighbourhoods )
-  
   filterData = reactiveValues(neighbourhoodData = toronto)
+  topNDataFilter = reactiveValues(topNGroup = NULL)
   
   observe({
-    change = c(input$neighbourhood, input$typeOfCrime, input$occurredYear)
-    if (!is.null(change)){
+    neighbourhoodChange = c(input$neighbourhood, input$typeOfCrime, input$occurredYear)
+    if (!is.null(neighbourhoodChange)){
       changedData <- subset(toronto, (toronto$Neighbourhood == input$neighbourhood))
       if (input$occurredYear != "All"){
         changedData <- subset(changedData, changedData$occurrenceyear == input$occurredYear )
@@ -62,8 +59,172 @@ shinyServer(function(input, output,session) {
       }
       filterData$neighbourhoodData <- changedData
     }
+    topNChange = c(input$crimeTypeForTopN, input$byArea)
+    if(!is.null(topNChange)){
+
+      if (input$crimeTypeForTopN != "All"){
+        topNData <- subset(toronto, toronto$MCI == input$crimeTypeForTopN)
+      } else {
+        topNData <- toronto
+      }
+      if(input$byArea == "Division"){
+        location_group <- group_by(topNData, Division)
+      } else {
+        location_group <- group_by(topNData, Neighbourhood)
+      }
+      crime_by_location <- dplyr::summarise(location_group, n=n())
+      topNDataFilter$topNGroup <- crime_by_location
+    }
+    
+  })
+  
+  ##### Toronto Overview
+  output$torontoAll <- renderPlot({
+    crime_group <- group_by(toronto, MCI)
+    crime_by_type <- summarise(crime_group, Occurrences=n())
+    crime_by_type <- crime_by_type[order(crime_by_type$Occurrences, decreasing = TRUE),]
+    ggplot(aes(x = reorder(MCI, Occurrences) , y = Occurrences), data = crime_by_type) +
+      geom_bar(stat = 'identity', position = position_dodge(), width = 0.5) +
+      geom_text(aes(label = Occurrences), stat = 'identity', data = crime_by_type, hjust = 1.1, size = 3.5, color = "white") +
+      coord_flip() +
+      xlab('Major Crime Indicators') +
+      ylab('Number of Occurrences') +
+      theme_minimal() +
+      theme(plot.title = element_text(size = 16),
+            axis.title = element_text(size = 12, face = "bold"),
+            axis.text.x = element_text(angle = 90, hjust = 1, vjust = .4))
+  })
+  
+  ### Toronto by Time Frame
+  output$torontoByTimeOption <- renderPlot({
+    
+    if(input$byTimeOption == "Hour"){
+      option_group <- group_by(toronto, occurrencehour, MCI)
+      option_crime <- dplyr::summarise(option_group, n=n())
+      ggplot(aes(x=occurrencehour, y=n, color=MCI), data =option_crime) + 
+        geom_line(size=1.5) + 
+        ylab('Number of Occurrences') +
+        xlab('Hour(24-hour clock)') +
+        theme_grey() +
+        theme(plot.title = element_text(size = 16),
+              axis.title = element_text(size = 12, face = "bold"))
+      
+    }else if (input$byTimeOption == "Day of Week"){
+      day_group <- group_by(toronto, occurrencedayofweek, MCI)
+      day_count <- dplyr::summarise(day_group,Total = n())
+      ggplot(day_count, aes(occurrencedayofweek, MCI, fill = Total)) +
+        geom_tile(size = 1, color = "white") +
+        scale_fill_viridis()  +
+        geom_text(aes(label=Total), color='white') +
+        xlab('Day of Week') +
+        theme(plot.title = element_text(size = 16), 
+              axis.title = element_text(size = 12, face = "bold"))
+      
+    }else if (input$byTimeOption == "Month"){
+      month_group <- group_by(toronto, occurrencemonth, MCI) 
+      month_count <- dplyr::summarise(month_group, n=n())
+      month_count$occurrencemonth <- ordered(month_count$occurrencemonth, levels = c('January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'))
+      ggplot(aes(x = occurrencemonth, y = n, fill = MCI), data = month_count) +
+        geom_bar(stat = 'identity',position = "stack", width = 0.6) +
+        coord_flip() +
+        xlab('Month') +
+        ylab('Number of Occurrences') +
+        theme_bw() +
+        theme(plot.title = element_text(size = 16),
+              axis.title = element_text(size = 12, face = "bold"))
+      
+    }else if (input$byTimeOption == "Year"){
+      year_data <- subset(toronto,!(toronto$occurrenceyear < 2014))
+      option_group <- group_by(year_data, occurrenceyear, MCI)
+      option_crime <- dplyr::summarise(option_group, n=n())
+      ggplot(aes(x=occurrenceyear, y=n, color=MCI), data =option_crime) + 
+        geom_line(size=1.5) + 
+        ylab('Number of Occurrences') +
+        xlab('Year)') +
+        theme_grey() +
+        theme(plot.title = element_text(size = 16),
+              axis.title = element_text(size = 12, face = "bold"))
+    }
+  })
+  
+  ### Heatmap
+  output$torontoHeatmap <- renderPlot({
+    heat_group <- group_by(toronto, Division, offence)
+    heat_count <- dplyr::summarise(heat_group,Total = n())
+    ggplot(heat_count, aes(Division, offence, fill = Total)) +
+      geom_tile(size = 1, color = "white") +
+      scale_fill_gradient2(
+        low = "red", high = "blue",
+        mid = "white", midpoint = 25)+
+      #geom_text(aes(label=Total), color='white') +
+      #xlab('Neighbourhood') +
+      theme(plot.title = element_text(size = 16), 
+            axis.title = element_text(size = 12, face = "bold"))
+  })
+  
+  ### Top n
+  output$topDangerous <- renderPlot({
+    crime_dangerous <- topNDataFilter$topNGroup[order(topNDataFilter$topNGroup$n, decreasing = TRUE), ]
+    crime_dangerous_top <- head(crime_dangerous, input$topN)
+    
+    if (input$byArea == "Division"){
+        ggplot(aes(x = reorder(Division, n), y = n, fill = reorder(Division, n)), data = crime_dangerous_top) +
+          geom_bar(stat = 'identity',  width = 0.6) +
+          coord_flip() +
+          xlab('Zone') +
+          ylab('Number of Occurrences') +
+          scale_fill_brewer(palette = "Reds") +
+          theme(plot.title = element_text(size = 16),
+                axis.title = element_text(size = 12, face = "bold"),
+                legend.position="none")
+    } else {
+        ggplot(aes(x = reorder(Neighbourhood, n), y = n, fill = reorder(Neighbourhood, n)), data = crime_dangerous_top) +
+          geom_bar(stat = 'identity', width = 0.6) +
+          coord_flip() +
+          xlab('Zone') +
+          ylab('Number of Occurrences') +
+          scale_fill_brewer(palette = "Reds") +
+          theme(plot.title = element_text(size = 16),
+                axis.title = element_text(size = 12, face = "bold"),
+                legend.position="none")
+        
+    }
+    
+  })
+  
+  output$topSafe <- renderPlot({
+    crime_safe <- topNDataFilter$topNGroup[order(topNDataFilter$topNGroup$n, decreasing = FALSE), ]
+    crime_safe_top <- head(crime_safe, input$topN)
+    
+    if (input$byArea == "Division"){
+      ggplot(aes(x = reorder(Division, -n), y = n, fill = reorder(Division, -n)), data = crime_safe_top) +
+        geom_bar(stat = 'identity',  width = 0.6) +
+        coord_flip() +
+        xlab('Zone') +
+        ylab('Number of Occurrences') +
+        scale_fill_brewer(palette = "Greens") +
+        theme(plot.title = element_text(size = 16),
+              axis.title = element_text(size = 12, face = "bold"),
+              legend.position="none")
+    } else {
+      ggplot(aes(x = reorder(Neighbourhood, -n), y = n, fill = reorder(Neighbourhood, -n)), data = crime_safe_top) +
+        geom_bar(stat = 'identity', width = 0.6) +
+        coord_flip() +
+        xlab('Zone') +
+        ylab('Number of Occurrences') +
+        scale_fill_brewer(palette = "Greens") +
+        theme(plot.title = element_text(size = 16),
+              axis.title = element_text(size = 12, face = "bold"),
+              legend.position="none")
+      
+    }
+    
   })
 
+  
+  
+  ### Neighbourhood analysis
+  
   output$crimeTime <- renderPlot({
     
     if (input$typeOfCrime != "All"){
@@ -71,7 +232,7 @@ shinyServer(function(input, output,session) {
       hour_crime <- dplyr::summarise(hour_crime_group, n=n())
       ggplot(aes(x=occurrencehour, y=n), data =hour_crime) + 
         geom_line(size=1.5, color = "orange") + 
-        ggtitle('Crime by Hour') +
+        #ggtitle('Crime by Hour') +
         ylab('Number of Occurrences') +
         xlab('Hour(24-hour clock)') +
         theme_bw() +
@@ -82,7 +243,7 @@ shinyServer(function(input, output,session) {
       hour_crime <- dplyr::summarise(hour_crime_group, n=n())
       ggplot(aes(x=occurrencehour, y=n, color=MCI), data =hour_crime) + 
         geom_line(size=1.5) + 
-        ggtitle('Crime by Hour') +
+        #ggtitle('Crime by Hour') +
         ylab('Number of Occurrences') +
         xlab('Hour(24-hour clock)') +
         theme_grey() +
@@ -99,7 +260,7 @@ shinyServer(function(input, output,session) {
           geom_tile(size = 1, color = "white") +
           scale_fill_viridis()  +
           geom_text(aes(label=Total), color='white') +
-          ggtitle("Crimes by Day of Week") +
+          #ggtitle("Crimes by Day of Week") +
           xlab('Day of Week') +
           theme(plot.title = element_text(size = 16), 
                 axis.title = element_text(size = 12, face = "bold"))
@@ -110,7 +271,6 @@ shinyServer(function(input, output,session) {
         geom_tile(size = 1, color = "white") +
         scale_fill_viridis()  +
         geom_text(aes(label=Total), color='white') +
-        ggtitle("Crimes by Day of Week") +
         xlab('Day of Week') +
         theme(plot.title = element_text(size = 16), 
               axis.title = element_text(size = 12, face = "bold"))
@@ -129,7 +289,7 @@ shinyServer(function(input, output,session) {
           coord_flip() +
           xlab('Month') +
           ylab('Number of Occurrences') +
-          ggtitle('Crimes by Month') +
+          #ggtitle('Crimes by Month') +
           scale_fill_brewer(
             palette = "Blues") +
           theme(plot.title = element_text(size = 16),
@@ -143,7 +303,7 @@ shinyServer(function(input, output,session) {
           coord_flip() +
           xlab('Month') +
           ylab('Number of Occurrences') +
-          ggtitle('Crimes by Month') +
+          #ggtitle('Crimes by Month') +
           theme_bw() +
           theme(plot.title = element_text(size = 16),
                 axis.title = element_text(size = 12, face = "bold"))
