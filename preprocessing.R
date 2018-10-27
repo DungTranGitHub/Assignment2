@@ -41,6 +41,10 @@ for(col in c("reportedyear","reportedday","reporteddayofyear","reportedhour","oc
   data[,col] = as.factor(data[,col])
 }
 
+#replace space in string
+data$offence <- gsub("\\s", "_", data$offence)
+data$MCI <- gsub("\\s", "_", data$MCI)
+
 #drop unused factor levels
 for(col in names(data)) {
   if(is.factor(data[,col])) {

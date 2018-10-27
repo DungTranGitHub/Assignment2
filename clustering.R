@@ -11,27 +11,27 @@ bygroup <- group_by(data, MCI, Neighbourhood)
 groups <- summarise(bygroup, n=n())
 groups <- groups[c("Neighbourhood", "MCI", "n")]
 hood <- spread(groups, key=MCI, value=n)
-hood <- hood[, -1]
+hood <- data.frame(hood[, -1])
 
 #normalize data using z-transformation
 ztransform <- function (data){
   (data - mean(data)) / sd(data)
 }
 
-hood$Assault <- ztransform(hood$Assault)
-hood$`Auto Theft` <- ztransform(hood$`Auto Theft`)
-hood$`Break and Enter` <- ztransform(hood$`Break and Enter`)
-hood$Robbery <- ztransform(hood$Robbery)
-hood$`Theft Over` <- ztransform(hood$`Theft Over`)
+for(col in names(hood)) {
+  hood[,col] = ztransform(hood[,col])
+}
 
 #determine number of clusters
-wssplot <- function(data, nc=15, seed=1234){
+wssplot <- function(data, nc=15, seed=1234) {
   wss <- (nrow(data)-1)*sum(apply(data,2,var))
-  for (i in 2:nc){
+  for (i in 2:nc) {
     set.seed(seed)
-    wss[i] <- sum(kmeans(data, centers=i)$withinss)}
+    wss[i] <- sum(kmeans(data, centers=i)$withinss)
+    }
   plot(1:nc, wss, type="b", xlab="Number of Clusters",
-       ylab="Within groups sum of squares")}
+       ylab="Within groups sum of squares")
+}
 
 #we can see there's an elbow around 3 clusters
 wssplot(hood, nc=15)
@@ -63,7 +63,7 @@ groups <- cutree(H.fit, k=3) # cut tree into 3 clusters
 rect.hclust(H.fit, k=3, border="red") 
 
 # if we want to look at other numbers of clusters
-counts <- sapply(2:6, function(ncl)table(cutree(H.fit, ncl)))
+counts <- sapply(2:6, function(ncl) table(cutree(H.fit, ncl)))
 names(counts) <- 2:6
 counts
 

@@ -11,6 +11,7 @@ library(dplyr)
 library(ggplot2)
 library(dplyr)
 library(ggmap)
+register_google(key = "AIzaSyAA4Odo-jCEuqZuakvUadhqg8_Z-bfXgFM")
 # Note: To run this script and to use google's map service, api keys needs to be set up properly. Refer to the following link: https://stackoverflow.com/questions/36175529/getting-over-query-limit-after-one-request-with-geocode
 ```
 
