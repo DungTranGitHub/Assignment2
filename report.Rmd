@@ -11,6 +11,9 @@ output:
 library(ggplot2)
 library(dplyr)
 library(ggmap)
+library(tidyr)
+library(dplyr)
+library(cluster)
 model_dir = "models"
 data_dir = "data"
 #saved_models = list.files(model_dir)
@@ -81,6 +84,12 @@ toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=po
 ```
 
 ### (3) Data outliers
+It seems like someone reported crimes over 40 years ago.
+```{r}
+data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
+data$reporteddate <- ymd(gsub("(.*)T.*", "\\1", data$reporteddate))
+data[which(data$occurrencedate < as.POSIXct("1970-01-01")),]
+```
 
 ### (4) Data correlations
 
@@ -103,8 +112,12 @@ data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_co
 # Keep "Hood ID" because we need this when we plot clustering results on a map
 
 #formatting dates - remove garbage time values at the end
-data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
-data$reporteddate <- ymd(gsub("(.*)T.*", "\\1", data$reporteddate))
+data$occurrencedate <- gsub("(.*)T.*", "\\1", data$occurrencedate)
+data$reporteddate <- gsub("(.*)T.*", "\\1", data$reporteddate)
+data$occurrencetime = ymd_h(paste(data$occurrencedate,data$occurrencehour,sep = " "), tz="America/New_York")
+data$reportedtime = ymd_h(paste(data$reporteddate,data$reportedhour,sep = " "), tz="America/New_York")
+data$occurrencedate = ymd(data$occurrencedate)
+data$reporteddate = ymd(data$reporteddate)
 
 #removing whitespace from day of week
 data$occurrencedayofweek <- as.factor(trimws(data$occurrencedayofweek, "b"))
@@ -121,15 +134,21 @@ data$occurrenceday[NAdata] <- day(data$occurrencedate[NAdata])
 data$occurrencedayofweek[NAdata] <- wday(data$occurrencedate[NAdata], label = TRUE, abbr = FALSE)
 data$occurrencedayofyear[NAdata] <- yday(data$occurrencedate[NAdata])
 
-#change things to factors
-for(col in c("reportedyear","reportedday","reporteddayofyear","reportedhour","occurrenceyear","occurrenceday",
-             "occurrencedayofyear","occurrencehour")) {
-  data[,col] = as.factor(data[,col])
-}
-
 #replace space in string
 data$offence <- gsub("\\s", "_", data$offence)
 data$MCI <- gsub("\\s", "_", data$MCI)
+
+#change things to factors
+for(col in c("offence","MCI","Division","Hood_ID")) {
+  data[,col] = as.factor(data[,col])
+}
+
+#change things to ordered factors, useful for daisy() later
+for(col in c("reportedyear","reportedmonth","reportedday","reporteddayofyear","reporteddayofweek",
+             "reportedhour","occurrenceyear","occurrencemonth","occurrenceday","occurrencedayofyear",
+             "occurrencedayofweek","occurrencehour")) {
+  data[,col] = ordered(data[,col])
+}
 
 #drop unused factor levels
 for(col in names(data)) {
@@ -149,10 +168,6 @@ With this preparation in mind, we can now start looking at models.
 ### (1) Clustering strategy I.
 clustering crime by police division and neighbourhood
 ```{r}
-library(tidyr)
-library(dplyr)
-library(cluster)
-
 # Neighbourhood first
 #first, coerce the data into a table that can be clustered - we aren't interested in the occurence date at this point
 #courtesy of Susan Li - https://datascienceplus.com/exploring-clustering-and-mapping-torontos-crimes/
@@ -246,6 +261,19 @@ p2 = toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), da
   scale_fill_distiller(palette='Spectral') + scale_alpha(range=c(0.5,0.5))
 p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = F)
 print(p3)
+```
+
+Clustering on all events
+```{r}
+# data_for_gower = data[,!names(data) %in% c("occurrencedate","reporteddate","reportedyear",
+#                                           "reportedmonth","reportedday","reporteddayofyear",
+#                                           "reporteddayofweek","reportedhour",
+#                                           "Lat","Long","Hood_ID","Neighbourhood","Division")]
+data_for_gower = data[,c("occurrencetime","reportedtime","premisetype","MCI")]
+data_for_gower$occurrencetime = as.numeric(data_for_gower$occurrencetime)
+data_for_gower$reportedtime = as.numeric(data_for_gower$reportedtime)
+# Are there skewed data?
+gower_dist <- daisy(sample_n(data_for_gower,nrow(data_for_gower)*0.5),metric = "gower")
 ```
 
 
