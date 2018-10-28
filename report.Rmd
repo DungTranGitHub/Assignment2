@@ -14,6 +14,13 @@ library(ggmap)
 library(tidyr)
 library(dplyr)
 library(cluster)
+library(lubridate)
+library(rgl)
+library(maptools)
+library("RColorBrewer")
+library(ggpubr)
+library(viridis)
+library(tidyverse)
 model_dir = "models"
 data_dir = "data"
 #saved_models = list.files(model_dir)
@@ -47,7 +54,7 @@ The data concerns all Major Crime Indicators (MCI) occurences in Toronto by repo
 
 There are 29 columns with 131,073 observations. However, 4 of these columns are duplicates, bringing us to 25 columns. Most of the columns
 
-There are both numeric and categorical attributes, and are further divided by client data, marketing details, and social/economic attributes.
+There are both numeric and categorical attributes, and are further divided by date-type data and crime-type data.
 
 The following table shows the numeric attributes:
 
@@ -64,12 +71,12 @@ Attribute    | Description
 
 ## IV. Data Exploration and Preparation
 
-### (1) Visualizations for client-related attributes
+### (1) Visualizations for date-related attributes
 
-### (2) Visualizations for the social/economic attributes
+### (2) Visualizations for the crime-related attributes
+
 Visualization crime level for all neibourhoods.
 ```{r}
-library(maptools)
 shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
 sh <- readShapePoly(shpfile)
 sh@data$AREA_S_CD <- as.integer(sh@data$AREA_S_CD)
@@ -78,7 +85,6 @@ hood_total_offence_cnt_table = merge(total_offence_cnt_table,sh@data,by.x='Hood_
 points_offense_cnt <- fortify(sh, region = 'AREA_S_CD')
 points_offense_cnt <- merge(points_offense_cnt, hood_total_offence_cnt_table, by.x='id', by.y='Hood_ID', all.x=TRUE)
 toronto <- qmap("Toronto, Ontario", zoom=10)
-library("RColorBrewer")
 toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
   scale_fill_distiller(palette='Spectral') + scale_alpha(range=c(0.5,0.5))
 ```
@@ -100,17 +106,24 @@ data[which(data$occurrencedate < as.POSIXct("1970-01-01")),]
 The following code documents the preprocessing done on the dataset, based on the data exploration done in this section.
 
 ```{r warning=FALSE,message=FALSE}
-library(lubridate)
-data_dir <- "data"
+#reload the data
 data <- read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
-#remove any duplicate rows/entries
+```
+
+First we want to remove any duplicate data - rows or columns. Some events have duplicated event IDs and should be removed. We also have duplicate columns for X/Y and Lat/Long, which should be removed. We are don't use the UCR codes or the ID numbers, so they're also removed.
+
+```{r warning=FALSE,message=FALSE}
+#remove duplicate rows/entries
 data <- subset(data, !duplicated(data$event_unique_id))
 
-#remove columns that aren't useful/duplicates
-#duplicates of other columns, UCR codes - not used in this case, ID number - not needed
-data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID")]
-# Keep "Hood ID" because we need this when we plot clustering results on a map
+#remove columns that aren't used/duplicates
+data <- data[, !colnames(data) %in% c("ï..X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID")]
 
+```
+
+Next we format the dates. There are garbage time values at the end of the dates, which are removed. The other date values are also changed into appropriate date/time values. Whitespace is also present in the day of week columns, so that is trimmed.
+
+```{r warning=FALSE,message=FALSE}
 #formatting dates - remove garbage time values at the end
 data$occurrencedate <- gsub("(.*)T.*", "\\1", data$occurrencedate)
 data$reporteddate <- gsub("(.*)T.*", "\\1", data$reporteddate)
@@ -122,21 +135,47 @@ data$reporteddate = ymd(data$reporteddate)
 #removing whitespace from day of week
 data$occurrencedayofweek <- as.factor(trimws(data$occurrencedayofweek, "b"))
 data$reporteddayofweek <- as.factor(trimws(data$reporteddayofweek, "b"))
+```
 
+Now let's take a look at the missing data:
+
+```{r warning=FALSE,message=FALSE}
 #missing data
-#colSums(is.na(data))
+colSums(is.na(data))
 NAdata <- unique (unlist (lapply (data, function (x) which (is.na (x)))))
+```
+Rows with NA data:
+```{r warning=FALSE,message=FALSE}
+NAdata
+```
 
+Occurence dates for rows with NA data:
+```{r warning=FALSE,message=FALSE}
+data$occurrencedate[NAdata]
+```
+
+We can see that there are 32 missing values, all in occurence date type columns. Upon further inspection, these are all the same rows. We can also see that the occurrence date value is correct, so these date type columns can have their missing values imputed. 
+
+```{r warning=FALSE,message=FALSE}
 #imputing occurence dates from occurence date field
 data$occurrenceyear[NAdata] <- year(data$occurrencedate[NAdata])
 data$occurrencemonth[NAdata] <- month(data$occurrencedate[NAdata], label = TRUE, abbr = FALSE)
 data$occurrenceday[NAdata] <- day(data$occurrencedate[NAdata])
 data$occurrencedayofweek[NAdata] <- wday(data$occurrencedate[NAdata], label = TRUE, abbr = FALSE)
 data$occurrencedayofyear[NAdata] <- yday(data$occurrencedate[NAdata])
+```
 
+Now we replace the space in the strings with an underscore for easier processing:
+
+```{r warning=FALSE,message=FALSE}
 #replace space in string
 data$offence <- gsub("\\s", "_", data$offence)
 data$MCI <- gsub("\\s", "_", data$MCI)
+```
+
+Next, all columns are converted into factors, with dates as ordered factors. Unused factor levels are also dropped (resulted from missing values).
+
+```{r warning=FALSE,message=FALSE}
 
 #change things to factors
 for(col in c("offence","MCI","Division","Hood_ID")) {
@@ -156,17 +195,23 @@ for(col in names(data)) {
     data[,col] = droplevels(data[,col])
   }
 }
+```
 
+Finally, we cherck for missing data one last time:
+
+```{r warning=FALSE,message=FALSE}
 # Check missing values one last time
 colSums(is.na(data))
 ```
 
 ## V. Modeling
 
-With this preparation in mind, we can now start looking at models. 
+With the data prepared, we can now start looking at models. 
 
 ### (1) Clustering strategy I.
-clustering crime by police division and neighbourhood
+
+First we can look at clustering crime by neighbourhood. We need to coerce the data into a clusterable table, sorted by MCI and neighbourhood.
+
 ```{r}
 # Neighbourhood first
 #first, coerce the data into a table that can be clustered - we aren't interested in the occurence date at this point
@@ -177,9 +222,11 @@ groups <- groups[c("Hood_ID", "MCI", "n")]
 hood <- as.data.frame(spread(groups, key=MCI, value=n))
 hood_id = as.integer(hood[,"Hood_ID"])
 hood = hood[,-1]
+head(hood)
 ```
 
-k-means
+Then we can use this table to perform k-means clustering. First we need to normalize the data and determine the number of clusters.
+
 ```{r}
 #normalize data
 for(col in names(hood)) {
@@ -199,14 +246,19 @@ wssplot <- function(data, nc=15, seed=1234) {
 
 #we can see there's an elbow around 3 clusters
 wssplot(hood, nc=15)
+```
 
+There is an elbow around 3 clusters, which appears to be a good number of clusters.
+
+```{r}
 # k-means
 k.means.fit <- kmeans(hood, 3)
 k.means.fit
+```
 
-#cluster 3 has lower than average crime, while cluster 2 has higher than average. cluster 1 sits in the middle for incidents
-#cluster 3 is also the one with the most number of neighbourhoods which implies that the majority of toronto is very safe
-#there are only 10 neighbourhoods in cluster 2, which means crime is concentrated in these small pockets of toronto
+From the above k-means cluster result, we can see that cluster 3 has lower than average crime. It has 93 neighbourhoods, meaning that the majority of Toronto is quite safe in terms of number of incidents occuring. Cluster 1 has slightly above average crime numbers, and it only has 37 neighbourhoods. 10 neighbourhoods have much higher than average crime numbers, which is seen in cluster 2, meaning that crime is concentrated in these small pockets of Toronto.
+
+```{r}
 
 #plotting k-means
 clusplot(hood, k.means.fit$cluster, main='2D representation of the Cluster solution',
@@ -217,7 +269,17 @@ clusplot(hood, k.means.fit$cluster, main='2D representation of the Cluster solut
 #implies that they are more similar to each other than they are to cluster 2
 ```
 
-hierarchical
+If we plot a 2D representation of the cluster, we can see that clusters 1 and 3 are tightly packed and overlap slightly. This means that they are quite simnilar to each other. Cluster 2 on the other had, is more broadly spread, meaning those neighbourhoods are more dissimilar to one another.
+
+Looking at a 3D representation, we can see how close clusters 1 and 3 are. However, with a third dimension, we can see that there is more of a spread than initially can be seen simply in two dimensions.
+
+```{r}
+#3D plot
+pc <-princomp(hood, cor=TRUE, scores=TRUE)
+plot3d(pc$scores[,1:3], col=k.means.fit$cluster, main="k-means clusters")
+```
+
+Next we can look at the neighbourhoods from a heirarchichal clustering approach. We calculate the distance and then can plot the dendrogram, with the clusters shown with a red border.
 ```{r}
 #hierarchical
 d <- dist(hood, method = "euclidean") # Euclidean distance matrix.
@@ -228,14 +290,18 @@ plot(H.fit) # display dendogram
 cluster_ids <- cutree(H.fit, k=3) # cut tree into 3 clusters
 # draw dendogram with red borders around the 3 clusters
 rect.hclust(H.fit, k=3, border="red") 
+```
 
+If we want to look at whether or not more or less clusters would be appropriate:
+
+```{r}
 # if we want to look at other numbers of clusters
 counts <- sapply(2:6, function(ncl) table(cutree(H.fit, ncl)))
 names(counts) <- 2:6
 counts
-
-# we can see that 3 clusters is likely ideal because we don't want to split many clusters with small numbers of neighbourhoods
 ```
+
+We can see that 3 clusters is ideal. We don't want to split the neighbourhoods into clusters with a small number of neighbourhoods.
 
 Now plot grouping on map
 ```{r}
@@ -253,8 +319,6 @@ toronto <- qmap("Toronto, Ontario", zoom=10)
 # toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points2, color='black') +
   #scale_fill_gradient(low='white', high='red')
 
-library("RColorBrewer")
-library(ggpubr)
 p1 = toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=cluster_ids), data=points_clustering, color='black') +
   scale_fill_manual(values = c("red", "green", "blue"))
 p2 = toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
@@ -262,6 +326,53 @@ p2 = toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), da
 p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = F)
 print(p3)
 ```
+
+Clustering on lat/long to look at natural crime hotspots vs compared with manual "clustering" aka neighbourhood divisions
+
+```{r}
+latlong <- data[, colnames(data) %in% c(#"premisetype", 
+                                        #"occurrenceyear", 
+                                        #"occurrencemonth", 
+                                        #"occurrencedayofweek", 
+                                        #"occurrencehour", 
+                                        #"MCI", 
+                                        "Lat", 
+                                        "Long")]
+
+
+#formatting
+#latlong$occurrencedayofweek <- factor(as.integer(latlong$occurrencedayofweek))
+#latlong$occurrencemonth <- match(latlong$occurrencemonth, month.name)
+
+#determine number of clusters
+#we can see there's an elbow around 7 clusters
+wssplot(latlong, nc=50)
+
+# k-means 
+# 34 divisions in Toronto
+k.means.fit <- kmeans(latlong, 34)
+k.means.fit
+str(k.means.fit)
+
+torclus <- as.data.frame(k.means.fit$centers)
+torclus$size <- k.means.fit$size
+
+tormap <- get_map(location =c(left=-79.8129, bottom=43.4544, right=-78.9011, top=43.9132))
+
+latlongclus <- latlong
+latlongclus$cluster <- as.factor(k.means.fit$cluster)
+
+#plot each incident, colour coded by cluster
+ggmap(tormap) +
+  geom_point( data= latlongclus, aes(x=Long[], y=Lat[], color= as.factor(cluster))) +
+  theme_void() + coord_map() 
+
+#plot bubble map with cluster centroids, size/colour determined by number of incidents in each cluster
+ggmap(tormap) +
+  geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size, color=size)) +
+  theme_void() + coord_map() 
+```
+
 
 Clustering on all events
 ```{r}
