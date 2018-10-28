@@ -117,7 +117,7 @@ First we want to remove any duplicate data - rows or columns. Some events have d
 data <- subset(data, !duplicated(data$event_unique_id))
 
 #remove columns that aren't used/duplicates
-data <- data[, !colnames(data) %in% c("ï..X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID")]
+data <- data[, !colnames(data) %in% c("?..X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID")]
 
 ```
 
@@ -397,6 +397,7 @@ for (i in seq(2,20,2)) {
   kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
 }
 ```
+
 ```{r}
 wss = c()
 for(kc in kproto_clusters) {
@@ -421,6 +422,14 @@ ggmap(my_map) +
   xlab('Longitude') +
   ylab('Latitude') +
   ggtitle('Place Holder')
+```
+
+```{r}
+kproto_results <- data %>%
+  dplyr::select(-occurrencedate,-reporteddate,-occurrencetime,-reportedtime) %>%
+  group_by(cluster_id) %>%
+  do(the_summary = summary(.))
+print(kproto_results$the_summary)
 ```
 
 
