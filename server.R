@@ -8,6 +8,7 @@
 #
 library(ggplot2)
 library(dplyr)
+library(plyr)
 library(ggpubr)
 library(tidyverse)
 library(caret)
@@ -26,6 +27,9 @@ library(tidyr)
 library(cluster)
 library(ggmap)
 library(maps)
+library(reshape2)
+library(scales)
+
 ### data initial loading
 model_dir = "models"
 data_dir = "data"
@@ -81,7 +85,7 @@ shinyServer(function(input, output,session) {
   ##### Toronto Overview
   output$torontoAll <- renderPlot({
     crime_group <- group_by(toronto, MCI)
-    crime_by_type <- summarise(crime_group, Occurrences=n())
+    crime_by_type <- dplyr::summarise(crime_group, Occurrences=n())
     crime_by_type <- crime_by_type[order(crime_by_type$Occurrences, decreasing = TRUE),]
     ggplot(aes(x = reorder(MCI, Occurrences) , y = Occurrences), data = crime_by_type) +
       geom_bar(stat = 'identity', position = position_dodge(), width = 0.5) +
@@ -149,17 +153,22 @@ shinyServer(function(input, output,session) {
   
   ### Heatmap
   output$torontoHeatmap <- renderPlot({
-    heat_group <- group_by(toronto, Division, offence)
+    base_size <- 9
+    heat_group <- group_by(toronto, Neighbourhood, offence)
     heat_count <- dplyr::summarise(heat_group,Total = n())
-    ggplot(heat_count, aes(Division, offence, fill = Total)) +
-      geom_tile(size = 1, color = "white") +
-      scale_fill_gradient2(
-        low = "red", high = "blue",
-        mid = "white", midpoint = 25)+
-      #geom_text(aes(label=Total), color='white') +
-      #xlab('Neighbourhood') +
-      theme(plot.title = element_text(size = 16), 
-            axis.title = element_text(size = 12, face = "bold"))
+    heat_count$Neighbourhood <- with(heat_count,reorder(Neighbourhood,Total))
+    heat_count.m <- melt(heat_count)
+    heat_count.m <- ddply(heat_count.m, .(variable), transform,rescale = rescale(value))
+    ggplot(heat_count.m, aes(Neighbourhood, offence)) + 
+        geom_tile(aes(fill = rescale),colour = "white") + 
+        scale_fill_gradient(low = "lightblue",high = "darkblue") +
+        theme_grey(base_size = base_size) + 
+        labs(x = "", y = "") + 
+        scale_x_discrete(expand = c(0, 0)) +
+        scale_y_discrete(expand = c(0, 0)) +
+        theme_minimal() +
+        theme(legend.position = "none",axis.ticks = element_blank(), axis.text.x = element_text(size = base_size *0.8, angle = 330, hjust = 0, colour = "grey50"))
+    
   })
   
   ### Top n
