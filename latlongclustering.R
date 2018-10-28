@@ -41,7 +41,7 @@ latlong$occurrencemonth <- match(latlong$occurrencemonth, month.name)
 wssplot(latlong, nc=50)
 
 # k-means 
-k.means.fit <- kmeans(latlong, 34)
+k.means.fit <- kmeans(latlong, 68)
 k.means.fit
 str(k.means.fit)
 
@@ -70,9 +70,15 @@ ggmap(tormap) +
 # tried to make a plot like this: https://www.r-graph-gallery.com/330-bubble-map-with-ggplot2/ 
 # but i couldn't...
 
+sample <- sample_frac(data, size=0.1)
+sample <- sample[, -(1:2)]
+sample <- sample[, -(21:22)]
+sample <- sample[, -18]
 
 #i also can't get hierarchical to work
-d <- dist(latlong, method = "euclidean")
+d <- dist(sample, method = "euclidean")
+
+d <- daisy(sample, metric="gower")
 H.fit <- hclust(d, method="ward.D2")
 
 #plot dendrogram
@@ -82,6 +88,6 @@ groups <- cutree(H.fit, k=4) # cut tree into 4 clusters
 rect.hclust(H.fit, k=4, border="red") 
 
 # if we want to look at other numbers of clusters
-counts <- sapply(2:6, function(ncl)table(cutree(H.fit, ncl)))
-names(counts) <- 2:6
+counts <- sapply(2:25, function(ncl)table(cutree(H.fit, ncl)))
+names(counts) <- 2:25
 counts

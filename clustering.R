@@ -52,6 +52,13 @@ clusplot(hood, k.means.fit$cluster, main='2D representation of the Cluster solut
 #we can see there is some overlap between cluster 1 and 3, which means they could potentially be one cluster
 #implies that they are more similar to each other than they are to cluster 2
 
+#3D plot
+
+library(rgl)
+pc <-princomp(hood, cor=TRUE, scores=TRUE)
+plot3d(pc$scores[,1:3], col=k.means.fit$cluster, main="k-means clusters")
+
+
 #hierarchical
 d <- dist(hood, method = "euclidean") # Euclidean distance matrix.
 H.fit <- hclust(d, method="ward.D2")
@@ -122,7 +129,7 @@ names(counts) <- 2:6
 counts
 #we can still see that 3 clusters looks to be the best number of clusters, without splitting them too deeply
 
-#clusteriung types of crime by occurence month/hour/date?
+#clusteriung types of crime by occurence month/hour
 
 #repeat for month
 bygroup <- group_by(data, MCI, occurrencemonth)
@@ -162,7 +169,7 @@ H.fit <- hclust(d, method="ward.D2")
 #plot dendrogram
 plot(H.fit) # display dendogram
 groups <- cutree(H.fit, k=2) # cut tree into 2 clusters
-# draw dendogram with red borders around the 3 clusters
+# draw dendogram with red borders around the clusters
 rect.hclust(H.fit, k=2, border="red") 
 
 # if we want to look at other numbers of clusters
@@ -170,3 +177,103 @@ counts <- sapply(2:6, function(ncl)table(cutree(H.fit, ncl)))
 names(counts) <- 2:6
 counts
 #2 clusters makes the most sense, since we start to get into clusters with 1 month when we split into 3
+
+#repeat for hour
+bygroup <- group_by(data, MCI, occurrencehour)
+groups <- summarise(bygroup, n=n())
+groups <- groups[c("occurrencehour", "MCI", "n")]
+hour <- spread(groups, key=MCI, value=n)
+hour <- hour[, -1]
+
+#normalize
+hour$Assault <- ztransform(hour$Assault)
+hour$`Auto Theft` <- ztransform(hour$`Auto Theft`)
+hour$`Break and Enter` <- ztransform(hour$`Break and Enter`)
+hour$Robbery <- ztransform(hour$Robbery)
+hour$`Theft Over` <- ztransform(hour$`Theft Over`)
+
+#determine number of clusters
+#we can see there's an elbow around 4 clusters
+wssplot(hour, nc=15)
+
+# k-means 
+k.means.fit <- kmeans(hour, 4)
+k.means.fit
+
+#cluster 2 has the hours where crime is least likely to occur
+#cluster 1 are the hours when assault, auto theft, and robber are more likely to occur
+#cluster 4 are the hours when crime is at somewhat average levels
+#cluster 3 has more break and enter and theft over and assault, but average auto theft and robbery
+
+#plotting k-means
+clusplot(hour, k.means.fit$cluster, main='2D representation of the Cluster solution',
+         color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+
+#no overlap! these hours are clearly defined
+
+#hierarchical
+d <- dist(hour, method = "euclidean")
+H.fit <- hclust(d, method="ward.D2")
+
+#plot dendrogram
+plot(H.fit) # display dendogram
+groups <- cutree(H.fit, k=4) # cut tree into 4 clusters
+# draw dendogram with red borders around the clusters
+rect.hclust(H.fit, k=4, border="red") 
+
+# if we want to look at other numbers of clusters
+counts <- sapply(2:10, function(ncl)table(cutree(H.fit, ncl)))
+names(counts) <- 2:10
+counts
+#no clear "good" cluster number but in the interest of not having small clusters, 4 or 5 clusters are probably the best
+
+#offence by premise type?
+bygroup <- group_by(data, premisetype, offence)
+groups <- summarise(bygroup, n=n())
+groups <- groups[c("offence", "premisetype", "n")]
+premise <- spread(groups, key=premisetype, value=n)
+premise <- premise[, -1]
+
+#normalize
+premise$Assault <- ztransform(premise$Assault)
+premise$`Auto Theft` <- ztransform(premise$`Auto Theft`)
+premise$`Break and Enter` <- ztransform(premise$`Break and Enter`)
+premise$Robbery <- ztransform(premise$Robbery)
+premise$`Theft Over` <- ztransform(premise$`Theft Over`)
+
+#determine number of clusters
+#we can see there's an elbow around 4 clusters
+wssplot(premise, nc=15)
+
+# k-means 
+k.means.fit <- kmeans(premise, 4)
+k.means.fit
+
+#cluster 2 has the hours where crime is least likely to occur
+#cluster 1 are the hours when assault, auto theft, and robber are more likely to occur
+#cluster 4 are the hours when crime is at somewhat average levels
+#cluster 3 has more break and enter and theft over and assault, but average auto theft and robbery
+
+#plotting k-means
+clusplot(premise, k.means.fit$cluster, main='2D representation of the Cluster solution',
+         color=TRUE, shade=TRUE,
+         labels=2, lines=0)
+
+#no overlap! these hours are clearly defined
+
+#hierarchical
+d <- dist(premise, method = "euclidean")
+H.fit <- hclust(d, method="ward.D2")
+
+#plot dendrogram
+plot(H.fit) # display dendogram
+groups <- cutree(H.fit, k=4) # cut tree into 4 clusters
+# draw dendogram with red borders around the clusters
+rect.hclust(H.fit, k=4, border="red") 
+
+# if we want to look at other numbers of clusters
+counts <- sapply(2:6, function(ncl)table(cutree(H.fit, ncl)))
+names(counts) <- 2:6
+counts
+#no clear "good" cluster number but in the interest of not having small clusters, 4 or 5 clusters are probably the best

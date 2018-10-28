@@ -11,7 +11,7 @@ data <- subset(data, !duplicated(data$event_unique_id))
 #UCR codes - not used in this case
 #ID number - not needed
 #Hood ID - not needed
-data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID","Hood_ID")]
+data <- data[, !colnames(data) %in% c("ï..X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID","Hood_ID")]
 
 #formatting dates - remove garbage time values at the end
 data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
@@ -37,7 +37,7 @@ data$occurrencedayofyear[NAdata] <- yday(data$occurrencedate[NAdata])
 
 #change things to factors
 for(col in c("reportedyear","reportedday","reporteddayofyear","reportedhour","occurrenceyear","occurrenceday",
-             "occurrencedayofyear","occurrencehour")) {
+             "occurrencedayofyear","occurrencehour", "MCI", "offence")) {
   data[,col] = as.factor(data[,col])
 }
 
