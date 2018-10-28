@@ -114,8 +114,8 @@ data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_co
 #formatting dates - remove garbage time values at the end
 data$occurrencedate <- gsub("(.*)T.*", "\\1", data$occurrencedate)
 data$reporteddate <- gsub("(.*)T.*", "\\1", data$reporteddate)
-data$occurrencetime = ymd_h(paste(data$occurrencedate,data$occurrencehour,sep = " "), tz="America/New_York")
-data$reportedtime = ymd_h(paste(data$reporteddate,data$reportedhour,sep = " "), tz="America/New_York")
+data$occurrencetime = ymd_h(paste(data$occurrencedate,data$occurrencehour,sep = " "), tz="EST")
+data$reportedtime = ymd_h(paste(data$reporteddate,data$reportedhour,sep = " "), tz="EST")
 data$occurrencedate = ymd(data$occurrencedate)
 data$reporteddate = ymd(data$reporteddate)
 
@@ -265,15 +265,51 @@ print(p3)
 
 Clustering on all events
 ```{r}
+library(clustMixType)
 # data_for_gower = data[,!names(data) %in% c("occurrencedate","reporteddate","reportedyear",
 #                                           "reportedmonth","reportedday","reporteddayofyear",
 #                                           "reporteddayofweek","reportedhour",
 #                                           "Lat","Long","Hood_ID","Neighbourhood","Division")]
-data_for_gower = data[,c("occurrencetime","reportedtime","premisetype","MCI")]
-data_for_gower$occurrencetime = as.numeric(data_for_gower$occurrencetime)
-data_for_gower$reportedtime = as.numeric(data_for_gower$reportedtime)
+data_fullclust = data[,c("occurrencetime","reportedtime","premisetype","offence")]
+data_fullclust$occurrencetime = as.numeric(data_fullclust$occurrencetime)
+data_fullclust$reportedtime = as.numeric(data_fullclust$reportedtime)
 # Are there skewed data?
-gower_dist <- daisy(sample_n(data_for_gower,nrow(data_for_gower)*0.5),metric = "gower")
+kproto_cluster <- kproto(data_fullclust,5)
+```
+
+But how many clusters are enough?
+```{r}
+library(rlist)
+set.seed(1234)
+kproto_clusters = list()
+for (i in seq(2,20,2)) {
+  kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
+}
+```
+```{r}
+wss = c()
+for(kc in kproto_clusters) {
+  wss = c(wss,kc$tot.withinss)
+}
+plot(wss, type="b", xlab="Number of Clusters/2",ylab="Within groups sum of squares")
+```
+
+```{r}
+kproto_selection = kproto_clusters[[3]]
+data$cluster_id = as.factor(kproto_selection$cluster)
+```
+
+```{r}
+to_map <- data.frame(data$MCI, data$Lat, data$Long, data$cluster_id)
+colnames(to_map) <- c('crimes', 'lat', 'lon', 'cluster_id')
+sbbox <- make_bbox(lon = data$Long, lat = data$Lat, f = 0.05)
+my_map <- get_map(location = sbbox, maptype = "roadmap", scale = 2, color="color", zoom = 10)
+ggmap(my_map) +
+  geom_point(data=to_map, aes(x = lon, y = lat, color = cluster_id), 
+             size = 0.01, alpha = 1) +
+  xlab('Longitude') +
+  ylab('Latitude') +
+  ggtitle('Place Holder')
 ```
 
 
