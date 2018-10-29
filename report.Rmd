@@ -44,21 +44,21 @@ The RShiny app is located at the following link: [link here](link here).
 
 ## II. Business Understanding
 
-The [Toronto Police Service](https://en.wikipedia.org/wiki/Toronto_Police_Service) is the police force that serves the Greater Toronto Area. It is the largest municipal police force in Canada, and the third largest police force in Canada. They are a taxpayer funded service, ranking as second for the government of Toronto's budgetary expenses. There is always 
+The [Toronto Police Service](https://en.wikipedia.org/wiki/Toronto_Police_Service) is the police force that serves the Greater Toronto Area. It is the largest municipal police force in Canada and the third largest police force in Canada. They are a taxpayer-funded service, ranking as second for the government of Toronto's budgetary expenses. There is always 
 
-THe objective of this model is to cluster crimes to determine which areas of Toronto have the most levels of crime, overall and for different Major Crime Indicators. This would enable the Toronto Police to most effectively allocate their officers and specialists to the areas that require them the most. The hope is that this would be an effective way to lower crime rates and enable more cases to be solved, all without spending more money.
+The objective of this model is to cluster crimes to determine which areas of Toronto have the most levels of crime, overall and for different Major Crime Indicators. This would enable the Toronto Police to most effectively allocate their officers and specialists to the areas that require them the most. The hope is that this would be an effective way to lower crime rates and enable more cases to be solved, all without spending more money.
 
 There are some ethical implications of using crime data. There are many avenues for bias to enter the data set. Police services around North America have come under increased scrutiny in recent years for racist policing. Some police policies or laws inherently disadvantage certain groups of people, which would create bias in the data. This means that conclusions drawn from a machine learning model based on biased data would create biased results. The conclusions should be looked at with other data, such as demographic data, and supplementary information, such as social considerations.
 
 ## III. Data Understanding
 
-The data set was provided courtesy of the [Toronto Police Service Open Data Portal](http://data.torontopolice.on.ca/). It is usable in accorance with the [Open Government License - Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
+The data set was provided courtesy of the [Toronto Police Service Open Data Portal](http://data.torontopolice.on.ca/). It is usable in accordance with the [Open Government License - Ontario](https://www.ontario.ca/page/open-government-licence-ontario).
 
-The data concerns all Major Crime Indicators (MCI) occurences in Toronto by reported date, between 2014 and 2017. The MCIs are Assault, Break and Enter, Auto Theft, and Theft Over (excludes Sexual Assaults). Locations in the data set are approximate, as they have been deliberately offset to the nearest road intersection to protect the privacy of involved individuals. 
+The data concerns all Major Crime Indicators (MCI) occurrences in Toronto by reported date, between 2014 and 2017. The MCIs are Assault, Break and Enter, Auto Theft, and Theft Over (excludes Sexual Assaults). Locations in the data set are approximate, as they have been deliberately offset to the nearest road intersection to protect the privacy of involved individuals. 
 
 There are 29 columns with 131,073 observations. However, 4 of these columns are duplicates, bringing us to 25 columns. Most of the columns
 
-There are both numeric and categorical attributes, and are further divided by date-type data and crime-type data.
+There are both numeric and categorical attributes and are further divided by date-type data and crime-type data.
 
 The following table shows the numeric attributes:
 
@@ -109,7 +109,7 @@ The following code documents the preprocessing steps idendified for this dataset
 data <- read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
 ```
 
-First we want to remove any duplicate data - rows or columns. Some events have duplicated event IDs and should be removed. We also have duplicate columns for X/Y and Lat/Long, which should be removed. We are don't use the UCR codes or the ID numbers, so they're also removed.
+First, we want to remove any duplicate data - rows or columns. Some events have duplicated event IDs and should be removed. We also have duplicate columns for X/Y and Lat/Long, which should be removed. We are don't use the UCR codes or the ID numbers, so they're also removed.
 
 ```{r warning=FALSE,message=FALSE}
 #remove duplicate rows/entries
@@ -120,7 +120,7 @@ data <- data[, !colnames(data) %in% c("?..X","Y","Index_","event_unique_id","ucr
 
 ```
 
-Next we format the dates. There are garbage time values at the end of the dates, which are removed. The other date values are also changed into appropriate date/time values. Whitespace is also present in the day of week columns, so that is trimmed.
+Next, we format the dates. There are garbage time values at the end of the dates, which are removed. The other date values are also changed into appropriate date/time values. Whitespace is also present in the day of week columns, so that is trimmed.
 
 ```{r warning=FALSE,message=FALSE}
 #formatting dates - remove garbage time values at the end
@@ -161,7 +161,7 @@ Occurence dates for rows with NA data:
 data$occurrencedate[NAdata]
 ```
 
-We can see that there are 32 missing values, all in occurence date related columns. Upon further inspection, these are all the same rows. We can also see that the occurrence date value is correct, so these date type columns can have their missing values imputed. 
+We can see that there are 32 missing values, all in occurrence date related columns. Upon further inspection, these are all the same rows. We can also see that the occurrence date value is correct, so these date type columns can have their missing values imputed. 
 
 ```{r warning=FALSE,message=FALSE}
 #imputing occurence dates from occurence date field
@@ -180,7 +180,7 @@ data$offence <- gsub("\\s", "_", data$offence)
 data$MCI <- gsub("\\s", "_", data$MCI)
 ```
 
-Next, all columns are converted into factors except Lat, Long, reportedtime and occurrencetime. Unused factor levels are also dropped (resulted from missing values).
+Next, all columns are converted into factors except Lat, Long, reportedtime, and occurrencetime. Unused factor levels are also dropped (resulted from missing values).
 
 ```{r warning=FALSE,message=FALSE}
 
@@ -216,7 +216,7 @@ colSums(is.na(data))
 With the data prepared, we can now start looking at models. 
 
 ### (1) Clustering strategy I.
-First we can look at clustering crime by neighbourhood. We need to coerce the data into a clusterable table, sorted by MCI and neighbourhood.
+First, we can look at clustering crime by neighborhood. We need to coerce the data into a clusterable table, sorted by MCI and neighborhood.
 
 ```{r}
 # Neighbourhood first
@@ -231,7 +231,7 @@ hood = hood[,-1]
 head(hood)
 ```
 
-Then we can use this table to perform k-means clustering. First we need to normalize the data and determine the number of clusters. To determine the number of clusters, we simply plot the within cluster sum-of-squares and pick a number after inspecting this plot.
+Then we can use this table to perform k-means clustering. First, we need to normalize the data and determine the number of clusters. To determine the number of clusters, we simply plot the within-cluster sum-of-squares and pick a number after inspecting this plot.
 ```{r}
 hood <- scale(hood)
 #determine number of clusters
@@ -248,7 +248,7 @@ wssplot <- function(data, nc=15, seed=1234) {
 #we can see there's an elbow around 3 clusters
 wssplot(hood, nc=15)
 ```
-Now it seems number 3 is a good choice of number of clusters. We then proceed to perform K-means clustering on the data-set. We have followed this tutorial(https://www.datanovia.com/en/lessons/cluster-validation-statistics-must-know-methods/) to evaluate the quality of clustering results. Specifically, we have used Silhouette width as an quantitative measures to evaluate the clustering quality. As we will see in the Silhouette plot, both in cluster #2 and cluster #3 have data points where the Silhouette width falls to negative, indicating a not so ideal clustering. This can also be observed in the 1st plot where we see that cluster #2 and cluster #3 is quite close to each other.
+Now it seems number 3 is a good choice of the number of clusters. We then proceed to perform K-means clustering on the data-set. We have followed this tutorial(https://www.datanovia.com/en/lessons/cluster-validation-statistics-must-know-methods/) to evaluate the quality of clustering results. Specifically, we have used Silhouette width as a quantitative measures to evaluate the clustering quality. As we will see in the Silhouette plot, both in cluster #2 and cluster #3 have data points where the Silhouette width falls to negative, indicating a not so ideal clustering. This can also be observed in the 1st plot where we see that cluster #2 and cluster #3 is quite close to each other.
 ```{r}
 # K-means clustering
 km.res <- eclust(hood, "kmeans", k = 3, graph = T)
@@ -261,23 +261,24 @@ Let's look at the cluster means from the outputs to see what we can learn.
 km.res
 ```
 
-We can see that cluster 3 has lower than average crime. It has 93 neighbourhoods, meaning that the majority of Toronto is quite safe in terms of number of incidents occuring. Cluster 2 has slightly above average crime numbers, and it only has 37 neighbourhoods. 10 neighbourhoods have much higher than average crime numbers, which is seen in cluster 3. In some way, we can intepret the results as such that crime is concentrated in these small pockets of Toronto.
+We can see that cluster 3 has lower than average crime. It has 93 neighborhoods, meaning that the majority of Toronto is quite safe in terms of the number of incidents occurring. Cluster 2 has slightly above average crime numbers, and it only has 37 neighborhoods. 10 neighborhoods have much higher than average crime numbers, which is seen in cluster 3. In some way, we can interpret the results as such that crime is concentrated in these small pockets of Toronto.
 
-As an interesting activity, we also looking at a 3D representation of the clustering results. With 3 princeple components, more variations should be captured that as in the case in 2 princeple components. With a third dimension, we can see that there is more of a spread than initially can be seen simply in two dimensions.
+As an interesting activity, we also looking at a 3D representation of the clustering results. With 3 principal components, more variations should be captured that as in the case in 2 principal components. With a third dimension, we can see that there is more of a spread than initially can be seen simply in two dimensions.
 ```{r}
 #3D plot
 pc <-princomp(hood, cor=TRUE, scores=TRUE)
 plot3d(pc$scores[,1:3], col=km.res$cluster, main="k-means clusters")
 ```
-Next we can look at the neighbourhoods from a heirarchichal clustering approach. Again, we need to determine how many clusters we want to have. For heirarchichal clustering, we look at the total number of observations that end up in different clusters with different configuration(in this case, the configuration is the number of clusters).
+
+Next, we can look at the neighborhoods from a hierarchical clustering approach. Again, we need to determine how many clusters we want to have. For hierarchical clustering, we look at the total number of observations that end up in different clusters with different configurations(in this case, the configuration is the number of clusters).
 ```{r}
 counts <- sapply(2:6, function(ncl) eclust(hood, "hclust", k = ncl, hc_metric = "euclidean", hc_method = "ward.D2")$size)
 names(counts) <- 2:6
 counts
 ```
-Still, we can see that 3 clusters is not bad, if we consider only the cluster size as the criterier for choosing the number of clusters. We don't want to split the neighbourhoods into clusters with a small number of neighbourhoods.
+Still, we can see that 3 clusters are not bad if we consider only the cluster size as the criteria for choosing the number of clusters. We don't want to split the neighborhoods into clusters with a small number of neighborhoods.
 
-Now that we have choose the number of clusters, we proceed to the clustering process. As previously in k-means, we look at Silhouette width as an quantitative measures to evaluate the clustering quality. To visually inspect the clusters, we plot dendrograms.
+Now that we have chosen the number of clusters, we proceed to the clustering process. As previously in k-means, we look at Silhouette width as a quantitative measure to evaluate the clustering quality. To visually inspect the clusters, we plot dendrograms.
 ```{r}
 # Hierarchical clustering
 hc.res <- eclust(hood, "hclust", k = 3, hc_metric = "euclidean", 
@@ -332,12 +333,12 @@ latlongclus$cluster <- as.factor(k.means.fit$cluster)
 
 tormap <- get_map(location =c(left=-79.8129, bottom=43.4544, right=-78.9011, top=43.9132))
 
-#plot each incident, colour coded by cluster
+#plot each incident, color-coded by cluster
 ggmap(tormap) +
   geom_point( data= latlongclus, aes(x=Long[], y=Lat[], color= as.factor(cluster))) +
   theme_void() + coord_map() 
 
-#plot bubble map with cluster centroids, size/colour determined by number of incidents in each cluster
+#plot bubble map with cluster centroids, size/ color determined by the number of incidents in each cluster
 ggmap(tormap) +
   geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size, color=size)) +
   theme_void() + coord_map() 
@@ -370,7 +371,7 @@ k.means.fit <- kmeans(hotspot, 4)
 k.means.fit
 ```
 
-We can see here that there is an elbow around 4, so we can run k means with 4 clusters. With these 4 clusters, we can see that cluster 1 has higher than average auto thefts, and slightly higher roberies, but is below average for the other 3 MCIs. Cluster 2 is a safe part of Toronto with lower crime incidents. Cluster 3 has slightly more assaults, break and enters, and robberies, but lower auto thefts and theft overs. Cluster 4 however is the most crime-centric area of Toronto, with many more incidents than average, excepting auto thefts. Luckily, there are only 3 hotspots in cluster 4, while there are 12 and 13 in clusters 2 and 3 respectively, which had generally fewer incidents overall. 
+We can see here that there is an elbow around 4, so we can run k means with 4 clusters. With these 4 clusters, we can see that cluster 1 has higher than average auto thefts, and slightly higher robberies, but is below average for the other 3 MCIs. Cluster 2 is a safe part of Toronto with lower crime incidents. Cluster 3 has slightly more assaults, break and enters, and robberies, but lower auto thefts and theft overs. Cluster 4, however, is the most crime-centric area of Toronto, with many more incidents than average, excepting auto thefts. Luckily, there are only 3 hotspots in cluster 4, while there are 12 and 13 in clusters 2 and 3 respectively, which had generally fewer incidents overall. 
 
 ```{r}
 
@@ -413,10 +414,10 @@ wssplot(div, nc=15)
 k.means.fit <- kmeans(div, 3)
 k.means.fit
 
-#similar to neighbourhoods, two clusters have low crime incidents (1 and 2), while cluster 3 has higher crime incidents
+#similar to neighborhoods, two clusters have low crime incidents (1 and 2), while cluster 3 has higher crime incidents
 # most districts are lower crime incident districts, while 9 specifically are higher
-#can we map this and see if they correspond to neighbourhoods?
-#do the toronto police have a dedicated district to each high crime neighbourhood?
+#can we map this and see if they correspond to neighborhoods?
+#do the Toronto police have a dedicated district to each high crime neighborhood?
 
 #plotting k-means
 clusplot(div, k.means.fit$cluster, main='2D representation of the Cluster solution',
@@ -484,7 +485,7 @@ kproto_results <- data %>%
   do(the_summary = summary(.))
 print(kproto_results$the_summary)
 ```
-Again, it's not entirely obvisous how each clusters differ from one another. However, we do spot a interesting observations on the 2nd cluster. Previously we observed that people can report crimes that happened much earlier than the time when they reported. The 2nd clusters seem to identify these reports(notice the difference of occurrenceyear and reportedyear in this clusters).
+Again, it's not entirely obvious how each cluster differs from one another. However, we do spot an interesting observation on the 2nd cluster. Previously we observed that people can report crimes that happened much earlier than the time when they reported. The 2nd clusters seem to identify these reports(notice the difference of occurrenceyear and reportedyear in this clusters).
 
 ## VI. Evaluation
 
