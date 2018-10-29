@@ -545,7 +545,7 @@ shinyServer(function(input, output,session) {
   
   output$divisionCentroid <- renderPlot({
     torontoMap +
-      geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size, color=size)) +
+      geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size)) +
       theme_void() + coord_map()
   })
   
