@@ -22,6 +22,9 @@ library(ggpubr)
 library(viridis)
 library(tidyverse)
 library(scatterplot3d)
+library(factoextra)
+library(fpc)
+library(NbClust)
 model_dir = "models"
 data_dir = "data"
 #saved_models = list.files(model_dir)
@@ -98,6 +101,7 @@ data$reporteddate <- ymd(gsub("(.*)T.*", "\\1", data$reporteddate))
 data[which(data$occurrencedate < as.POSIXct("1970-01-01")),]
 ```
 The rest of the data is mostly categorical in their nature, so no concerns need to be addressed in terms of data outliers here.
+
 ### (4) Data Preprocessing
 The following code documents the preprocessing steps idendified for this dataset.
 ```{r warning=FALSE,message=FALSE}
@@ -212,7 +216,6 @@ colSums(is.na(data))
 With the data prepared, we can now start looking at models. 
 
 ### (1) Clustering strategy I.
-
 First we can look at clustering crime by neighbourhood. We need to coerce the data into a clusterable table, sorted by MCI and neighbourhood.
 
 ```{r}
@@ -228,14 +231,9 @@ hood = hood[,-1]
 head(hood)
 ```
 
-Then we can use this table to perform k-means clustering. First we need to normalize the data and determine the number of clusters.
-
+Then we can use this table to perform k-means clustering. First we need to normalize the data and determine the number of clusters. To determine the number of clusters, we simply plot the within cluster sum-of-squares and pick a number after inspecting this plot.
 ```{r}
-#normalize data
-for(col in names(hood)) {
-  hood[,col] = (hood[,col] - mean(hood[,col])) / sd(hood[,col])
-}
-
+hood <- scale(hood)
 #determine number of clusters
 wssplot <- function(data, nc=15, seed=1234) {
   wss <- (nrow(data)-1)*sum(apply(data,2,var))
@@ -250,63 +248,48 @@ wssplot <- function(data, nc=15, seed=1234) {
 #we can see there's an elbow around 3 clusters
 wssplot(hood, nc=15)
 ```
-
-There is an elbow around 3 clusters, which appears to be a good number of clusters.
-
+Now it seems number 3 is a good choice of number of clusters. We then proceed to perform K-means clustering on the data-set. We have followed this tutorial(https://www.datanovia.com/en/lessons/cluster-validation-statistics-must-know-methods/) to evaluate the quality of clustering results. Specifically, we have used Silhouette width as an quantitative measures to evaluate the clustering quality. As we will see in the Silhouette plot, both in cluster #2 and cluster #3 have data points where the Silhouette width falls to negative, indicating a not so ideal clustering. This can also be observed in the 1st plot where we see that cluster #2 and cluster #3 is quite close to each other.
 ```{r}
-# k-means
-k.means.fit <- kmeans(hood, 3)
-k.means.fit
+# K-means clustering
+km.res <- eclust(hood, "kmeans", k = 3, graph = T)
+fviz_silhouette(km.res, palette = "jco", ggtheme = theme_classic())
 ```
 
-From the above k-means cluster result, we can see that cluster 3 has lower than average crime. It has 93 neighbourhoods, meaning that the majority of Toronto is quite safe in terms of number of incidents occuring. Cluster 1 has slightly above average crime numbers, and it only has 37 neighbourhoods. 10 neighbourhoods have much higher than average crime numbers, which is seen in cluster 2, meaning that crime is concentrated in these small pockets of Toronto.
-
+Let's look at the cluster means from the outputs to see what we can learn.
 ```{r}
-
-#plotting k-means
-clusplot(hood, k.means.fit$cluster, main='2D representation of the Cluster solution',
-         color=TRUE, shade=TRUE,
-         labels=2, lines=0)
-
-#we can see there is some overlap between cluster 1 and 3, which means they could potentially be one cluster
-#implies that they are more similar to each other than they are to cluster 2
+# k-means results
+km.res
 ```
 
-If we plot a 2D representation of the cluster, we can see that clusters 1 and 3 are tightly packed and overlap slightly. This means that they are quite simnilar to each other. Cluster 2 on the other had, is more broadly spread, meaning those neighbourhoods are more dissimilar to one another.
+We can see that cluster 3 has lower than average crime. It has 93 neighbourhoods, meaning that the majority of Toronto is quite safe in terms of number of incidents occuring. Cluster 2 has slightly above average crime numbers, and it only has 37 neighbourhoods. 10 neighbourhoods have much higher than average crime numbers, which is seen in cluster 3. In some way, we can intepret the results as such that crime is concentrated in these small pockets of Toronto.
 
-Looking at a 3D representation, we can see how close clusters 1 and 3 are. However, with a third dimension, we can see that there is more of a spread than initially can be seen simply in two dimensions.
-
+As an interesting activity, we also looking at a 3D representation of the clustering results. With 3 princeple components, more variations should be captured that as in the case in 2 princeple components. With a third dimension, we can see that there is more of a spread than initially can be seen simply in two dimensions.
 ```{r}
 #3D plot
 pc <-princomp(hood, cor=TRUE, scores=TRUE)
-plot3d(pc$scores[,1:3], col=k.means.fit$cluster, main="k-means clusters")
+plot3d(pc$scores[,1:3], col=km.res$cluster, main="k-means clusters")
 ```
-
-Next we can look at the neighbourhoods from a heirarchichal clustering approach. We calculate the distance and then can plot the dendrogram, with the clusters shown with a red border.
+Next we can look at the neighbourhoods from a heirarchichal clustering approach. Again, we need to determine how many clusters we want to have. For heirarchichal clustering, we look at the total number of observations that end up in different clusters with different configuration(in this case, the configuration is the number of clusters).
 ```{r}
-#hierarchical
-d <- dist(hood, method = "euclidean") # Euclidean distance matrix.
-H.fit <- hclust(d, method="ward.D2")
-
-#plot dendrogram
-plot(H.fit) # display dendogram
-cluster_ids <- cutree(H.fit, k=3) # cut tree into 3 clusters
-# draw dendogram with red borders around the 3 clusters
-rect.hclust(H.fit, k=3, border="red") 
-```
-
-If we want to look at whether or not more or less clusters would be appropriate:
-
-```{r}
-# if we want to look at other numbers of clusters
-counts <- sapply(2:6, function(ncl) table(cutree(H.fit, ncl)))
+counts <- sapply(2:6, function(ncl) eclust(hood, "hclust", k = ncl, hc_metric = "euclidean", hc_method = "ward.D2")$size)
 names(counts) <- 2:6
 counts
 ```
+Still, we can see that 3 clusters is not bad, if we consider only the cluster size as the criterier for choosing the number of clusters. We don't want to split the neighbourhoods into clusters with a small number of neighbourhoods.
 
-We can see that 3 clusters is ideal. We don't want to split the neighbourhoods into clusters with a small number of neighbourhoods.
+Now that we have choose the number of clusters, we proceed to the clustering process. As previously in k-means, we look at Silhouette width as an quantitative measures to evaluate the clustering quality. To visually inspect the clusters, we plot dendrograms.
+```{r}
+# Hierarchical clustering
+hc.res <- eclust(hood, "hclust", k = 3, hc_metric = "euclidean", 
+                 hc_method = "ward.D2")
 
-Now plot grouping on map
+# Visualize dendrograms
+fviz_dend(hc.res, show_labels = FALSE,
+         palette = "jco", as.ggplot = TRUE)
+
+fviz_silhouette(hc.res, palette = "jco", ggtheme = theme_classic())
+```
+It seems like we have reached the same conlusion as the k-means algorithms: cluster #1 and cluster #2 does not have large gap. The following codes plot the clustering results on the map. We also plot the offence count in each neiborhood and it can be seen that the 2nd plot is highly correlated with the 1st plot (which makes sense).
 ```{r}
 hood_ids_and_cluster_ids <- data.frame(cbind(hood_id,cluster_ids))
 hood_ids_and_cluster_ids$cluster_ids = as.factor(hood_ids_and_cluster_ids$cluster_ids)
@@ -410,7 +393,6 @@ ggmap(tormap) +
 When we plot the clusters using principal component analysis in 2D, we can see that the clusters are relatively well separated. Cluster 1 and 4 are spread out, but clusters 2 and 3 are tighter. On the map, we can also see that cluster 4 is concentrated in downtown Toronto, while cluster 1 is in the northwest part. 
 
 ```{r}
-
 #coerce data for Divisions
 bygroup <- group_by(data, MCI, Division)
 groups <- summarise(bygroup, n=n())
@@ -449,27 +431,25 @@ Can we map this?
 
 
 ### (3) Clustering strategy III.
-
-Clustering on all events
+So far we have aggregated crime statistics into either neibourhood or division. What if we run clustering on data that excludes geographical information. Does such clustering produce naturally occuring crime zone? We will find out in the following analysis.
 ```{r}
 library(clustMixType)
 # data_for_gower = data[,!names(data) %in% c("occurrencedate","reporteddate","reportedyear",
 #                                           "reportedmonth","reportedday","reporteddayofyear",
 #                                           "reporteddayofweek","reportedhour",
 #                                           "Lat","Long","Hood_ID","Neighbourhood","Division")]
-data_fullclust = data[,c("occurrencetime","reportedtime","premisetype","offence")]
+data_fullclust = data[,c("occurrencetime","reportedtime","premisetype","offence","MCI")]
 data_fullclust$occurrencetime = as.numeric(data_fullclust$occurrencetime)
 data_fullclust$reportedtime = as.numeric(data_fullclust$reportedtime)
 # Are there skewed data?
-kproto_cluster <- kproto(data_fullclust,5)
 ```
 
-But how many clusters are enough?
+As in kmeans, we determine the number of clusters based on the trends shown in within cluster sum of squares.
 ```{r}
 library(rlist)
 set.seed(1234)
 kproto_clusters = list()
-for (i in seq(2,20,2)) {
+for (i in seq(2,10,1)) {
   kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
 }
 ```
@@ -479,35 +459,32 @@ wss = c()
 for(kc in kproto_clusters) {
   wss = c(wss,kc$tot.withinss)
 }
-plot(wss, type="b", xlab="Number of Clusters/2",ylab="Within groups sum of squares")
+plot(seq(2,10,1),wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
 ```
-
+We see here that, beyond 4 clusters (or 7 clusters), there seems to be diminishing returns in reducing within-cluster sum of squres. We choose 4 clusters in this case. Then plot the clustering results on a map:
 ```{r}
 kproto_selection = kproto_clusters[[3]]
 data$cluster_id = as.factor(kproto_selection$cluster)
-```
-
-```{r}
 to_map <- data.frame(data$MCI, data$Lat, data$Long, data$cluster_id)
 colnames(to_map) <- c('crimes', 'lat', 'lon', 'cluster_id')
 sbbox <- make_bbox(lon = data$Long, lat = data$Lat, f = 0.05)
 my_map <- get_map(location = sbbox, maptype = "roadmap", scale = 2, color="color", zoom = 10)
 ggmap(my_map) +
   geom_point(data=to_map, aes(x = lon, y = lat, color = cluster_id), 
-             size = 0.05, alpha = 1) +
+             size = 0.5, alpha = 1) +
   xlab('Longitude') +
   ylab('Latitude') +
   ggtitle('Place Holder')
 ```
-
+Just by visual inspection on the map, it's hard to see any patterns. What if we inspect the statistics within each clusters?
 ```{r}
 kproto_results <- data %>%
-  dplyr::select(-occurrencedate,-reporteddate,-occurrencetime,-reportedtime) %>%
+  dplyr::select(-X,-occurrencedate,-reporteddate,-occurrencetime,-reportedtime, -Lat, -Long) %>%
   group_by(cluster_id) %>%
   do(the_summary = summary(.))
 print(kproto_results$the_summary)
 ```
-
+Again, it's not entirely obvisous how each clusters differ from one another. However, we do spot a interesting observations on the 2nd cluster. Previously we observed that people can report crimes that happened much earlier than the time when they reported. The 2nd clusters seem to identify these reports(notice the difference of occurrenceyear and reportedyear in this clusters).
 
 ## VI. Evaluation
 
