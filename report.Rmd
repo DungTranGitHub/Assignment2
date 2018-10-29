@@ -21,6 +21,7 @@ library("RColorBrewer")
 library(ggpubr)
 library(viridis)
 library(tidyverse)
+library(scatterplot3d)
 model_dir = "models"
 data_dir = "data"
 #saved_models = list.files(model_dir)
@@ -90,21 +91,15 @@ toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=po
 ```
 
 ### (3) Data outliers
-It seems like someone reported crimes over 40 years ago.
+It seems like someone reported crimes over 40 years ago. But since nothing stops people from doing this, we are not going to treat these as outliers.
 ```{r}
 data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
 data$reporteddate <- ymd(gsub("(.*)T.*", "\\1", data$reporteddate))
 data[which(data$occurrencedate < as.POSIXct("1970-01-01")),]
 ```
-
-### (4) Data correlations
-
-### (5) Possible inconsistencies in data
-
-### (6) Data Preprocessing
-
-The following code documents the preprocessing done on the dataset, based on the data exploration done in this section.
-
+The rest of the data is mostly categorical in their nature, so no concerns need to be addressed in terms of data outliers here.
+### (4) Data Preprocessing
+The following code documents the preprocessing steps idendified for this dataset.
 ```{r warning=FALSE,message=FALSE}
 #reload the data
 data <- read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
@@ -137,6 +132,14 @@ data$occurrencedayofweek <- as.factor(trimws(data$occurrencedayofweek, "b"))
 data$reporteddayofweek <- as.factor(trimws(data$reporteddayofweek, "b"))
 ```
 
+We also convert the month/day of week from string representation to integer representation:
+```{r}
+data$reportedmonth = month(data$reportedtime)
+data$reporteddayofweek = wday(data$reportedtime)
+data$occurrencemonth = month(data$occurrencetime)
+data$occurrencedayofweek = wday(data$occurrencetime)
+```
+
 Now let's take a look at the missing data:
 
 ```{r warning=FALSE,message=FALSE}
@@ -154,7 +157,7 @@ Occurence dates for rows with NA data:
 data$occurrencedate[NAdata]
 ```
 
-We can see that there are 32 missing values, all in occurence date type columns. Upon further inspection, these are all the same rows. We can also see that the occurrence date value is correct, so these date type columns can have their missing values imputed. 
+We can see that there are 32 missing values, all in occurence date related columns. Upon further inspection, these are all the same rows. We can also see that the occurrence date value is correct, so these date type columns can have their missing values imputed. 
 
 ```{r warning=FALSE,message=FALSE}
 #imputing occurence dates from occurence date field
@@ -173,7 +176,7 @@ data$offence <- gsub("\\s", "_", data$offence)
 data$MCI <- gsub("\\s", "_", data$MCI)
 ```
 
-Next, all columns are converted into factors, with dates as ordered factors. Unused factor levels are also dropped (resulted from missing values).
+Next, all columns are converted into factors except Lat, Long, reportedtime and occurrencetime. Unused factor levels are also dropped (resulted from missing values).
 
 ```{r warning=FALSE,message=FALSE}
 
@@ -182,11 +185,11 @@ for(col in c("offence","MCI","Division","Hood_ID")) {
   data[,col] = as.factor(data[,col])
 }
 
-#change things to ordered factors, useful for daisy() later
+#if we use the gower distance and daisy() function, the following metrics can be considered to converted to ordered factor; but since gower distance turns out to be too expensive for large dataset, we have treated the following as normal factors as well!
 for(col in c("reportedyear","reportedmonth","reportedday","reporteddayofyear","reporteddayofweek",
              "reportedhour","occurrenceyear","occurrencemonth","occurrenceday","occurrencedayofyear",
              "occurrencedayofweek","occurrencehour")) {
-  data[,col] = ordered(data[,col])
+  data[,col] = factor(data[,col])
 }
 
 #drop unused factor levels
@@ -418,7 +421,7 @@ sbbox <- make_bbox(lon = data$Long, lat = data$Lat, f = 0.05)
 my_map <- get_map(location = sbbox, maptype = "roadmap", scale = 2, color="color", zoom = 10)
 ggmap(my_map) +
   geom_point(data=to_map, aes(x = lon, y = lat, color = cluster_id), 
-             size = 0.01, alpha = 1) +
+             size = 0.05, alpha = 1) +
   xlab('Longitude') +
   ylab('Latitude') +
   ggtitle('Place Holder')
