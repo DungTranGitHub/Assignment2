@@ -84,12 +84,13 @@ Visualization crime level for all neibourhoods.
 shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
 sh <- readShapePoly(shpfile)
 sh@data$AREA_S_CD <- as.integer(sh@data$AREA_S_CD)
-total_offence_cnt_table = data %>% group_by(Hood_ID) %>% summarise(offence_cnt = n())
+total_offence_cnt_table = data %>% group_by(Hood_ID) %>% dplyr::summarise(offence_cnt = n())
 hood_total_offence_cnt_table = merge(total_offence_cnt_table,sh@data,by.x='Hood_ID',by.y='AREA_S_CD')
 points_offense_cnt <- fortify(sh, region = 'AREA_S_CD')
 points_offense_cnt <- merge(points_offense_cnt, hood_total_offence_cnt_table, by.x='id', by.y='Hood_ID', all.x=TRUE)
-toronto <- qmap("Toronto, Ontario", zoom=10)
-toronto + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
+torontoMap <- qmap("Toronto, Ontario", zoom=10)
+save(torontoMap, file="map/toronto_map.RData")
+torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
   scale_fill_distiller(palette='Spectral') + scale_alpha(range=c(0.5,0.5))
 ```
 
@@ -223,7 +224,7 @@ First, we can look at clustering crime by neighborhood. We need to coerce the da
 #first, coerce the data into a table that can be clustered - we aren't interested in the occurence date at this point
 #courtesy of Susan Li - https://datascienceplus.com/exploring-clustering-and-mapping-torontos-crimes/
 bygroup <- group_by(data, MCI, Hood_ID)
-groups <- summarise(bygroup, n=n())
+groups <- dplyr::summarise(bygroup, n=n())
 groups <- groups[c("Hood_ID", "MCI", "n")]
 hood <- as.data.frame(spread(groups, key=MCI, value=n))
 hood_id = as.integer(hood[,"Hood_ID"])
@@ -345,7 +346,7 @@ We can see how the clusters look with both the incidents plotted as well as the 
 data2 <- data
 data2$cluster <- k.means.fit$cluster
 bygroup <- group_by(data2, MCI, cluster)
-groups <- summarise(bygroup, n=n())
+groups <- dplyr::summarise(bygroup, n=n())
 groups <- groups[c("cluster", "MCI", "n")]
 hotspot <- data.frame(spread(groups, key=MCI, value=n))
 hotspot <- hotspot[, -1]
@@ -385,7 +386,7 @@ When we plot the clusters using principal component analysis in 2D, we can see t
 ```{r}
 #coerce data for Divisions
 bygroup <- group_by(data, MCI, Division)
-groups <- summarise(bygroup, n=n())
+groups <- dplyr::summarise(bygroup, n=n())
 groups <- groups[c("Division", "MCI", "n")]
 div <- as.data.frame(spread(groups, key=MCI, value=n))
 div_name = div[,1]
