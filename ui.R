@@ -10,11 +10,13 @@
 library(shiny)
 library(shinydashboard)
 library(DT)
+library(rgl)
 
 sidebar <- dashboardSidebar(
   sidebarMenu(
     menuItem("Toronto Crimes", tabName = "toronto", icon = icon("th")),
-    menuItem("Map And Cluster", icon = icon("dashboard"), tabName = "map", badgeColor = "green")
+    menuItem("Clustering By Neighbourhood", icon = icon("dashboard"), tabName = "neighbourhoodClustering", badgeColor = "green"),
+    menuItem("Clustering By Long Lat", icon = icon("dashboard"), tabName = "longlatClustering", badgeColor = "green")
   )
 )
 
@@ -109,9 +111,105 @@ body <- dashboardBody(
             )
     ),
     
-    tabItem(tabName = 'map',
-            h2("Your map is here")
+    tabItem(tabName = 'neighbourhoodClustering',
+            fluidRow(
+              box(title = "Strategy I - Clustering By Neighbourhood", width = 12, solidHeader = TRUE, status = "warning",
+                  box(
+                    title ="Number of Clusters", width = 3,
+                    sliderInput("clusterNo", "Top n:", 3, 6, 3)
+                  ),
+                  box(title = "Toronto Criminal Map By Neighbourhoods", width = 12, solidHeader = TRUE, status = "primary",
+                      box(
+                        title = "Manual Clustering Map", width = 4, height = 450, status = "warning",
+                        plotOutput("manualMap")
+                      ),
+                      
+                      box(
+                        title = "kMean Clustering Map", width = 4, height = 450, status = "warning",
+                        plotOutput("kMeanMap")
+                      ),
+                      
+                      box(
+                        title = "Hierarchical Clustering Map", width = 4, height = 450, status = "warning",
+                        plotOutput("hierarchicalMap")
+                      )
+                  ),
+                  box(
+                    title = "kMean Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    box(
+                      title = "Determine number of clusters", width = 4,height = 530, status = "warning",
+                      plotOutput("kMeanElbow")
+                    ),
+                    box(
+                      title = "2D kMean Clustering", width = 4,height = 530, status = "warning",
+                      plotOutput("2DkMeanCluster")
+                    ),
+                    box(
+                      title = "3D kMean Clustering", width = 4,height = 530, status = "warning",
+                      rglwidgetOutput("3DkMeanCluster")
+                    )
+                  ),
+                  box(
+                    title = "Hierarchical Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    box(
+                      title = "Hiearchical Cluster Diagram", width = 4,height = 530, status = "warning",
+                      plotOutput("clusterDiagram")
+                    ),
+                    box(
+                      title = "2D Hierarchical Clustering", width = 4,height = 530, status = "warning",
+                      plotOutput("2DHierarchicalCluster")
+                    ),
+                    box(
+                      title = "3D Hierarchichal Clustering", width = 4,height = 530, status = "warning",
+                      rglwidgetOutput("3DHierarchicalCluster")
+                    )
+                  )
+              )
+            )
+    ),
+    tabItem(tabName = 'longlatClustering',
+            fluidRow(
+              box(title = "Strategy II - Clustering By Long Lat", width = 12, solidHeader = TRUE, status = "warning",
+                  box(
+                    title ="Number of Hotspot Clusters", width = 3,
+                    sliderInput("hotspotClusterNo", "Top n:", 3, 6, 4)
+                  ),
+                  box(title = "Toronto Criminal Map By Long Lat", width = 12, solidHeader = TRUE, status = "primary",
+                      box(
+                        title = "Division Clustering Map", width = 4, height = 450, status = "warning",
+                        plotOutput("divisionMap")
+                      ),
+                      
+                      box(
+                        title = "Division Criminal Centroid Map", width = 4, height = 450, status = "warning",
+                        plotOutput("divisionCentroid")
+                      ),
+                      
+                      box(
+                        title = "Hotspot Clustering Map", width = 4, height = 450, status = "warning",
+                        plotOutput("hotSpotMap")
+                      )
+                      
+                  ),
+                  box(
+                    title = "Hotspot Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    box(
+                      title = "Determine number of clusters", width = 4,height = 530, status = "warning",
+                      plotOutput("hotspotElbow")
+                    ),
+                    box(
+                      title = "2D kMean Clustering", width = 4,height = 530, status = "warning",
+                      plotOutput("2DHotspotCluster")
+                    ),
+                    box(
+                      title = "3D kMean Clustering", width = 4,height = 530, status = "warning",
+                      rglwidgetOutput("3DHotspotCluster")
+                    )
+                  )
+              )
+            )
     )
+    
   )
 )
 

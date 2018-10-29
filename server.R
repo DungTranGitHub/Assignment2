@@ -29,27 +29,137 @@ library(ggmap)
 library(maps)
 library(reshape2)
 library(scales)
+library(lubridate)
+library(maptools)
+library(RColorBrewer)
+library(rgl)
 
 ### data initial loading
 model_dir = "models"
 data_dir = "data"
+map_dir = "map"
+saved_maps = list.files(map_dir)
 
 ### load data
 data_initial=read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
+### load map
+for(file in saved_maps) {
+  load(paste(map_dir,file,sep="/"))
+}
+### load neighbourhood
+shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
+sh <- readShapePoly(shpfile)
+sh@data$AREA_S_CD <- as.integer(sh@data$AREA_S_CD)
 
+### declare local variables
 toronto <- subset(data_initial, !duplicated(data_initial$event_unique_id))
 toronto <- subset(toronto, !is.na(toronto$occurrenceyear))
 toronto <- subset(toronto, !is.na(toronto$offence))
 toronto <- subset(toronto, !(is.na(toronto$occurrencedayofweek) | toronto$occurrencedayofweek == ""))
 neighbourhoods  <-  unique(toronto$Neighbourhood)
-sort(neighbourhoods)
 
+### processing data for clustering 
+data <- subset(data_initial, !duplicated(data_initial$event_unique_id))
+
+#remove columns that aren't useful/duplicates
+#duplicates of other columns, UCR codes - not used in this case, ID number - not needed
+data <- data[, !colnames(data) %in% c("X","Y","Index_","event_unique_id","ucr_code","ucr_ext","FID")]
+# Keep "Hood ID" because we need this when we plot clustering results on a map
+
+#formatting dates - remove garbage time values at the end
+data$occurrencedate <- gsub("(.*)T.*", "\\1", data$occurrencedate)
+data$reporteddate <- gsub("(.*)T.*", "\\1", data$reporteddate)
+data$occurrencetime = ymd_h(paste(data$occurrencedate,data$occurrencehour,sep = " "), tz="America/New_York")
+data$reportedtime = ymd_h(paste(data$reporteddate,data$reportedhour,sep = " "), tz="America/New_York")
+data$occurrencedate = ymd(data$occurrencedate)
+data$reporteddate = ymd(data$reporteddate)
+
+#removing whitespace from day of week
+data$occurrencedayofweek <- as.factor(trimws(data$occurrencedayofweek, "b"))
+data$reporteddayofweek <- as.factor(trimws(data$reporteddayofweek, "b"))
+
+#missing data
+#colSums(is.na(data))
+NAdata <- unique (unlist (lapply (data, function (x) which (is.na (x)))))
+
+#imputing occurence dates from occurence date field
+data$occurrenceyear[NAdata] <- year(data$occurrencedate[NAdata])
+data$occurrencemonth[NAdata] <- month(data$occurrencedate[NAdata], label = TRUE, abbr = FALSE)
+data$occurrenceday[NAdata] <- day(data$occurrencedate[NAdata])
+data$occurrencedayofweek[NAdata] <- wday(data$occurrencedate[NAdata], label = TRUE, abbr = FALSE)
+data$occurrencedayofyear[NAdata] <- yday(data$occurrencedate[NAdata])
+
+#replace space in string
+data$offence <- gsub("\\s", "_", data$offence)
+data$MCI <- gsub("\\s", "_", data$MCI)
+
+#change things to factors
+for(col in c("offence","MCI","Division","Hood_ID")) {
+  data[,col] = as.factor(data[,col])
+}
+
+#change things to ordered factors, useful for daisy() later
+for(col in c("reportedyear","reportedmonth","reportedday","reporteddayofyear","reporteddayofweek",
+             "reportedhour","occurrenceyear","occurrencemonth","occurrenceday","occurrencedayofyear",
+             "occurrencedayofweek","occurrencehour")) {
+  data[,col] = ordered(data[,col])
+}
+
+#drop unused factor levels
+for(col in names(data)) {
+  if(is.factor(data[,col])) {
+    data[,col] = droplevels(data[,col])
+  }
+}
+### (3) Data outliers
+data$occurrencedate <- ymd(gsub("(.*)T.*", "\\1", data$occurrencedate))
+data$reporteddate <- ymd(gsub("(.*)T.*", "\\1", data$reporteddate))
+data[which(data$occurrencedate < as.POSIXct("1970-01-01")),]
+
+### Hood group for neighbourhood clustering
+bygroup <- group_by(data, MCI, Hood_ID)
+groups <- dplyr::summarise(bygroup, n=n())
+groups <- groups[c("Hood_ID", "MCI", "n")]
+hood <- as.data.frame(spread(groups, key=MCI, value=n))
+hood_id = as.integer(hood[,"Hood_ID"])
+hood = hood[,-1]
+for(col in names(hood)) {
+  hood[,col] = (hood[,col] - mean(hood[,col])) / sd(hood[,col])
+}
+# Hierarchichal Clustering
+d <- dist(hood, method = "euclidean") # Euclidean distance matrix.
+H.fit <- hclust(d, method="ward.D2")
+
+### Long Lat Clustering
+latlong <- data[, colnames(data) %in% c("Lat", "Long")]
+k.means.division <- kmeans(latlong, 34)
+
+torclus <- as.data.frame(k.means.division$centers)
+torclus$size <- k.means.division$size
+latlongclus <- latlong
+latlongclus$cluster <- as.factor(k.means.division$cluster)
+
+## Hotspot Clustering
+data2 <- data
+data2$cluster <- k.means.division$cluster
+bygroup <- group_by(data2, MCI, cluster)
+groups <- dplyr::summarise(bygroup, n=n())
+groups <- groups[c("cluster", "MCI", "n")]
+hotspot <- as.data.frame(spread(groups, key=MCI, value=n))
+hotspot <- hotspot[, -1]
+for(col in names(hotspot)) {
+  hotspot[,col] = (hotspot[,col] - mean(hotspot[,col])) / sd(hotspot[,col])
+}
+
+
+#### Shiny app
 shinyServer(function(input, output,session) {
   
   updateSelectInput(session, "neighbourhood", choices = neighbourhoods )
   filterData = reactiveValues(neighbourhoodData = toronto)
   topNDataFilter = reactiveValues(topNGroup = NULL)
-  
+  neighbourhoodKMean = reactiveValues(kMeanClusters = NULL)
+  hotspotKMean = reactiveValues(hotspotClusters = NULL)
   observe({
     neighbourhoodChange = c(input$neighbourhood, input$typeOfCrime, input$occurredYear)
     if (!is.null(neighbourhoodChange)){
@@ -78,6 +188,16 @@ shinyServer(function(input, output,session) {
       }
       crime_by_location <- dplyr::summarise(location_group, n=n())
       topNDataFilter$topNGroup <- crime_by_location
+    }
+    
+    if(!is.null(input$clusterNo)){
+      k.means.fit <- kmeans(hood, input$clusterNo)
+      neighbourhoodKMean$kMeanClusters <- k.means.fit$cluster
+    }
+    
+    if(!is.null(input$hotspotClusterNo)){
+      k.means.fit <- kmeans(hotspot, input$hotspotClusterNo)
+      hotspotKMean$hotspotClusters <- k.means.fit$cluster
     }
     
   })
@@ -325,5 +445,147 @@ shinyServer(function(input, output,session) {
     group <-  group_by(filterData$neighbourhoodData, MCI, offence)
     tableData <- dplyr::summarise(group, Total=n())
   })
+  
+  
+  ### Map and Clustering
+  
+  ### Strategy I - Clustering By Neighbourhood
+  output$manualMap <- renderPlot({
+    total_offence_cnt_table = data %>% group_by(Hood_ID) %>% dplyr::summarise(offence_cnt = n())
+    hood_total_offence_cnt_table = merge(total_offence_cnt_table,sh@data,by.x='Hood_ID',by.y='AREA_S_CD')
+    points_offense_cnt <- fortify(sh, region = 'AREA_S_CD')
+    points_offense_cnt <- merge(points_offense_cnt, hood_total_offence_cnt_table, by.x='id', by.y='Hood_ID', all.x=TRUE)
+    torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
+      scale_fill_distiller(palette='Spectral') + scale_alpha(range=c(0.5,0.5))
+  })
+  
+
+  output$kMeanElbow <- renderPlot({
+    
+    #determine number of clusters
+    wssplot <- function(data, nc=15, seed=1234) {
+      wss <- (nrow(data)-1)*sum(apply(data,2,var))
+      for (i in 2:nc) {
+        set.seed(seed)
+        wss[i] <- sum(kmeans(data, centers=i)$withinss)
+      }
+      plot(1:nc, wss, type="b", xlab="Number of Clusters",
+           ylab="Within groups sum of squares")
+    }
+    #we can see there's an elbow around 3 clusters
+    wssplot(hood, nc=15)
+    
+  })
+  
+  output$`2DkMeanCluster` <- renderPlot({
+    clusplot(hood, neighbourhoodKMean$kMeanClusters,
+             color=TRUE, shade=TRUE,
+             labels=2, lines=0)
+  })
+  
+  output$`3DkMeanCluster` <- renderRglwidget({
+    # k-means
+    pc <-princomp(hood, cor=TRUE, scores=TRUE)
+    rgl.open(useNULL = T)
+    rgl.bg(color = "white" )
+    rgl.spheres(pc$scores[,1:3], r = 0.2, col=neighbourhoodKMean$kMeanClusters)
+    rgl.bbox(color=c("#333377","black"), emission="#333377",
+              specular="#3333FF", shininess=5, alpha=0.8, xlen=5, ylen=5, zlen=2, marklen=15.9) 
+    rglwidget()
+  })
+  
+  output$kMeanMap <- renderPlot({
+    cluster_ids <- neighbourhoodKMean$kMeanClusters
+    hood_ids_and_cluster_ids <- data.frame(cbind(hood_id,cluster_ids))
+    hood_ids_and_cluster_ids$cluster_ids = as.factor(hood_ids_and_cluster_ids$cluster_ids)
+    hood_name_and_cluster_ids = merge(hood_ids_and_cluster_ids,sh@data,by.x='hood_id',by.y='AREA_S_CD')
+    points_clustering <- fortify(sh, region = 'AREA_S_CD')
+    points_clustering <- merge(points_clustering, hood_name_and_cluster_ids, by.x='id', by.y='hood_id', all.x=TRUE)
+    torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=cluster_ids), data=points_clustering, color='black') +
+    scale_fill_brewer(palette = "Set2")
+  })
+  
+  output$clusterDiagram <- renderPlot({
+    plot(H.fit)
+    rect.hclust(H.fit, k=input$clusterNo, border="red") 
+  })
+  
+  output$`2DHierarchicalCluster` <- renderPlot({
+    clusplot(hood, cutree(H.fit, k=input$clusterNo) ,
+             color=TRUE, shade=TRUE,
+             labels=2, lines=0)
+  })
+  
+  output$`3DHierarchicalCluster` <- renderRglwidget({
+    pc <-princomp(hood, cor=TRUE, scores=TRUE)
+    rgl.open(useNULL = T)
+    rgl.bg(color = "white" )
+    rgl.spheres(pc$scores[,1:3], r = 0.2, col=cutree(H.fit, k=input$clusterNo) )
+    rgl.bbox(color=c("#333377","black"), emission="#333377",
+             specular="#3333FF", shininess=5, alpha=0.8, xlen=5, ylen=5, zlen=2, marklen=15.9) 
+    rglwidget()
+  })
+  
+  output$hierarchicalMap <- renderPlot({
+    cluster_ids <- cutree(H.fit, k=input$clusterNo)
+    hood_ids_and_cluster_ids <- data.frame(cbind(hood_id,cluster_ids))
+    hood_ids_and_cluster_ids$cluster_ids = as.factor(hood_ids_and_cluster_ids$cluster_ids)
+    hood_name_and_cluster_ids = merge(hood_ids_and_cluster_ids,sh@data,by.x='hood_id',by.y='AREA_S_CD')
+    points_clustering <- fortify(sh, region = 'AREA_S_CD')
+    points_clustering <- merge(points_clustering, hood_name_and_cluster_ids, by.x='id', by.y='hood_id', all.x=TRUE)
+    torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=cluster_ids), data=points_clustering, color='black') +
+      scale_fill_brewer(palette = "Set2")
+  })
+  
+  output$divisionMap <- renderPlot({
+    torontoMap +
+      geom_point( data= latlongclus, aes(x=Long[], y=Lat[], color= as.factor(cluster))) +
+      theme_void() + coord_map() 
+  })
+  
+  output$divisionCentroid <- renderPlot({
+    torontoMap +
+      geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size, color=size)) +
+      theme_void() + coord_map()
+  })
+  
+  output$hotspotElbow <- renderPlot({
+    #determine number of clusters
+    wssplot <- function(data, nc=15, seed=1234) {
+      wss <- (nrow(data)-1)*sum(apply(data,2,var))
+      for (i in 2:nc) {
+        set.seed(seed)
+        wss[i] <- sum(kmeans(data, centers=i)$withinss)
+      }
+      plot(1:nc, wss, type="b", xlab="Number of Clusters",
+           ylab="Within groups sum of squares")
+    }
+    #we can see there's an elbow around 3 clusters
+    wssplot(hotspot, nc=15)
+  })
+  
+  output$`2DHotspotCluster` <- renderPlot({
+    clusplot(hotspot, hotspotKMean$hotspotClusters,
+             color=TRUE, shade=TRUE,
+             labels=2, lines=0)
+  })
+  
+  output$`3DHotspotCluster` <- renderRglwidget ({
+    pc <-princomp(hotspot, cor=TRUE, scores=TRUE)
+    rgl.open(useNULL = T)
+    rgl.bg(color = "white" )
+    rgl.spheres(pc$scores[,1:3], r = 0.2, col=hotspotKMean$hotspotClusters)
+    rgl.bbox(color=c("#333377","black"), emission="#333377",
+             specular="#3333FF", shininess=5, alpha=0.8, xlen=5, ylen=5, zlen=2, marklen=15.9) 
+    rglwidget()
+  })
+  
+  output$hotSpotMap <- renderPlot({
+    clusters <- as.factor(hotspotKMean$hotspotClusters)
+    torontoMap +
+      geom_point( data= torclus, aes(x=Long[], y=Lat[], color= clusters, size = 5 )) +
+      theme_void() + coord_map()
+  })
+  
 
 })
