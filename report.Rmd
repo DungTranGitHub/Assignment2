@@ -425,7 +425,6 @@ fviz_dend(hc.res, show_labels = FALSE,
 fviz_silhouette(hc.res, palette = "jco", ggtheme = theme_classic())
 ```
 It seems like we have reached the same conlusion as the k-means algorithms: cluster #1 and cluster #2 does not have large gap. The following codes plot the clustering results on the map. We also plot the offence count in each neiborhood and it can be seen that the 2nd plot is highly correlated with the 1st plot (which makes sense).
-Map with kMean Clustering v.s Manual Cluster Map
 ```{r}
 cluster_ids <- km.res$cluster
 hood_ids_and_cluster_ids <- data.frame(cbind(hood_id,cluster_ids))
@@ -445,29 +444,8 @@ p2 = torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt),
 p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = F)
 print(p3)
 ```
-Map with Hierarchical Clustering v.s Manual Cluster Map
-```{r}
-cluster_ids <- hc.res$cluster
-hood_ids_and_cluster_ids <- data.frame(cbind(hood_id,cluster_ids))
-hood_ids_and_cluster_ids$cluster_ids = as.factor(hood_ids_and_cluster_ids$cluster_ids)
-shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
-sh <- readShapePoly(shpfile)
-sh@data$AREA_S_CD <- as.integer(sh@data$AREA_S_CD)
-
-hood_name_and_cluster_ids = merge(hood_ids_and_cluster_ids,sh@data,by.x='hood_id',by.y='AREA_S_CD')
-points_clustering <- fortify(sh, region = 'AREA_S_CD')
-points_clustering <- merge(points_clustering, hood_name_and_cluster_ids, by.x='id', by.y='hood_id', all.x=TRUE)
-
-p1 = torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=cluster_ids), data=points_clustering, color='black') +
-  scale_fill_brewer(palette = "Set2")
-p2 = torontoMap + geom_polygon(aes(x=long,y=lat, group=group, fill=offence_cnt), data=points_offense_cnt, color='black') +
-  scale_fill_distiller(palette='Spectral') + scale_alpha(range=c(0.5,0.5))
-p3 = ggarrange(p1, p2, ncol = 2, nrow = 1, common.legend = F)
-print(p3)
-```
 ### (2) Clustering strategy II.
 We can perform clustering on lat/long to look at natural crime hotspots. We can compare this to a manual cluster like the Toronto police divisions.
-
 ```{r}
 latlong <- data[, colnames(data) %in% c("Lat", "Long")]
 
@@ -490,7 +468,6 @@ ggmap(tormap) +
   geom_point( data= torclus, aes(x=Long[], y=Lat[], size=size)) +
   theme_void() + coord_map() 
 ```
-
 We can see how the clusters look with both the incidents plotted as well as the centroids. Next, we can perform k-means clustering on the natural crime hotspot clusters and on the Toronto Police divisions to see how they compare to one another.
 ```{r}
 #coerce data for Hotspots
@@ -506,34 +483,20 @@ hotspot = data.frame(scale(hotspot))
 #we can see there's an elbow around 4 clusters
 wssplot(hotspot, nc=15)
 ```
-
 We can see here that there is an elbow around 4, so we can run k means with 4 clusters. With these 4 clusters, we can see that cluster 4 has higher than average auto thefts, and slightly higher robberies, but is below average for the other 3 MCIs. Cluster 1 is a safe part of Toronto with lower crime incidents. Cluster 3 has slightly more assaults, break and enters, and robberies, but lower auto thefts and theft overs. Cluster 2, however, is the most crime-centric area of Toronto, with many more incidents than average, excepting auto thefts. Luckily, there are only 3 hotspots in cluster 2, while there are 12 and 13 in clusters 1 and 3 respectively, which had generally fewer incidents overall. 
 
-From the silhouette plot, we can see that clustering based on this data set is better as compared to Clustering strategy I.
+From the silhouette plot, we can see that clustering based on this data set is a little better as compared to Clustering strategy I. When we plot the clusters using principal component analysis in 2D, we can see that the clusters are relatively well separated. Cluster 1 and 4 are spread out, but clusters 2 and 3 are tighter. On the map, we can also see that cluster 4 is concentrated in downtown Toronto, while cluster 1 is in the northwest part. 
 ```{r}
 km.res <- eclust(hotspot, "kmeans", k = 4, graph = T)
 fviz_silhouette(km.res, palette = "jco", ggtheme = theme_classic())
 km.res
-```
-
-```{r}
-#plotting k-means
-clusplot(hotspot, km.res$cluster, main='2D representation of the Cluster solution',
-         color=TRUE, shade=TRUE,
-         labels=2, lines=0)
-
-#pc <-princomp(hotspot, cor=TRUE, scores=TRUE)
-#plot3d(pc$scores[,1:3], col=k.means.fit$cluster, main="k-means clusters")
-
 hotspot$cluster <- factor(km.res$cluster)
-
 ggmap(tormap) +
   geom_point( data= torclus, aes(x=Long[], y=Lat[], color = hotspot$cluster)) +
   theme_void() + coord_map()
 ```
-
-When we plot the clusters using principal component analysis in 2D, we can see that the clusters are relatively well separated. Cluster 1 and 4 are spread out, but clusters 2 and 3 are tighter. On the map, we can also see that cluster 4 is concentrated in downtown Toronto, while cluster 1 is in the northwest part. 
-
+### (3) Clustering strategy III.
+The following code documents the third way we have tried in terms of clustering. Instead of aggregating the dataset based on neighbourhood, we can aggregate the dataset according to the police division that each event belongs to.
 ```{r}
 #coerce data for Divisions
 bygroup <- group_by(data, MCI, Division)
@@ -556,39 +519,23 @@ wssplot(div, nc=15)
 km.res <- eclust(div, "kmeans", k = 3, graph = T)
 fviz_silhouette(km.res, palette = "jco", ggtheme = theme_classic())
 km.res
-
-#similar to neighborhoods, two clusters have low crime incidents (1 and 2), while cluster 3 has higher crime incidents
-# most districts are lower crime incident districts, while 9 specifically are higher
-#can we map this and see if they correspond to neighborhoods?
-#do the Toronto police have a dedicated district to each high crime neighborhood?
 ```
+Similar to clustering after neighborhood-based aggregation, two clusters have low crime incidents (1 and 2), while cluster 3 has higher crime incidents most districts are lower crime incident districts, while 9 specifically are higher. However, from both the visual representation (based on princeple components) of the clustering and silhouette plot, police-division-based aggregation clearly works better than neighborhood-based aggregation.
 
-Mapping this is probably not possible
-```{r}
-division_vs_hood_id = data[,c("Division","Hood_ID")]
-table(division_vs_hood_id)
-```
-
-
-### (3) Clustering strategy III.
+### (3) Clustering strategy IV.
 So far we have aggregated crime statistics into either neibourhood or division. What if we run clustering on data that excludes geographical information. Does such clustering produce naturally occuring crime zone? We will find out in the following analysis.
 ```{r}
 library(clustMixType)
-# data_for_gower = data[,!names(data) %in% c("occurrencedate","reporteddate","reportedyear",
-#                                           "reportedmonth","reportedday","reporteddayofyear",
-#                                           "reporteddayofweek","reportedhour",
-#                                           "Lat","Long","Hood_ID","Neighbourhood","Division")]
 data_fullclust = data[,c("occurrencetime","reportedtime","premisetype","offence","MCI")]
 data_fullclust$occurrencetime = as.numeric(data_fullclust$occurrencetime)
 data_fullclust$reportedtime = as.numeric(data_fullclust$reportedtime)
 ```
-
 However, one important distinction as compared to previous clustering analysises is that, we now have mixed data type, being numeric and categorical. To handle this situation, we have experimented daisy and Gower's distance formula. However, Gower's distance formula drastically increase memory consumption when the dataset is large, making it not pratical to run on our own computers. As such, we swtiched to another algorithms "k-prototypes clustering" that can handle mixed type data. As in kmeans, we determine the number of clusters based on the trends shown in within cluster sum of squares.
 ```{r}
 library(rlist)
 set.seed(1234)
 kproto_clusters = list()
-for (i in seq(2,10,1)) {
+for (i in seq(2,8,1)) {
   kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
 }
 
@@ -627,6 +574,7 @@ print(kproto_results$the_summary)
 Again, it's not entirely obvious how each cluster differs from one another. However, we do spot an interesting observation on the 2nd cluster. Previously we observed that people can report crimes that happened much earlier than the time when they reported. The 2nd clusters seem to identify these reports(notice the difference of occurrenceyear and reportedyear in this clusters).
 
 ## VI. Evaluation
+Throughout the clustering analysis in part V, we have evaluate the clustering quality by ploting visual representations of the clustering and by ploting the silhouette plot. As a short summary, using police-division-based aggregation and neighborhood-based aggregation both produced clustering results where we can spot a pattern in the clustering. Yet police-division-based aggregation seems to provide a higher quality of clustering. The other two clustering strategies that we have used, on the other hand, are not so informative, at least not from what we can tell immediately. 
 
 ## VII. Deployment
 
