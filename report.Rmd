@@ -74,22 +74,7 @@ The data set was provided courtesy of the [Toronto Police Service Open Data Port
 
 The data concerns all Major Crime Indicators (MCI) occurrences in Toronto by reported date, between 2014 and 2017. The MCIs are Assault, Break and Enter, Auto Theft, and Theft Over (excludes Sexual Assaults). Locations in the data set are approximate, as they have been deliberately offset to the nearest road intersection to protect the privacy of involved individuals. 
 
-There are 29 columns with 131,073 observations. However, 4 of these columns are duplicates, bringing us to 25 columns. Most of the columns
-
-There are both numeric and categorical attributes and are further divided by date-type data and crime-type data.
-
-The following table shows the numeric attributes:
-
-
-Attribute    | Description
--------------|------------------------------------------------------------------------
-...          | ...
-
-While this table shows the categorical attributes:
-
-Attribute    | Description
--------------|------------------------------------------------------------------------
-...          | ...
+There are 29 columns with 131,073 observations. However, 4 of these columns are duplicates, bringing us to 25 columns. The the meta data for this dataset is provided in this [link](https://opendata.arcgis.com/datasets/902071c8e5e04e9ba12faa582a450836_0.csv). 
 
 ## IV. Data Exploration and Preparation
 
