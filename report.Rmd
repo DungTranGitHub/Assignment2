@@ -194,7 +194,7 @@ base_size <- 9
         scale_x_discrete(expand = c(0, 0)) +
         scale_y_discrete(expand = c(0, 0)) +
         theme_minimal() +
-        theme(legend.position = "none",axis.ticks = element_blank(), axis.text.x = element_text(size = base_size *0.8, angle = 330, hjust = 0, colour = "grey50"))
+        theme(legend.position = "none",axis.ticks = element_blank(), axis.text.x = element_text(size = base_size *0.5, angle = 270, hjust = 0, colour = "grey50"),axis.text.y = element_text(size = base_size *0.5))
 ```
 We also can visualize some interesting information from the dataset e.g.: Finding the top dangerous or top safe zones, neighbourhoods in Toronto based on all MCI or on a specific MCI. The following charts display top 5 dangerous and top 5 safe neighbourhoods in Toronto on total MCI. For more options on other top neighbourhoods/divisions on total MCI or for a specific MCI, please explore on our application.
 
