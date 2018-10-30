@@ -11,16 +11,11 @@ library(dplyr)
 library(plyr)
 library(ggpubr)
 library(tidyverse)
-library(caret)
-library(ROCR)
-library(pROC)
 library(rlist)
-library(Hmisc)
 library(corrplot)
 library(ggcorrplot)
 library(DMwR)
 library(ggthemes)
-library(glmnet)
 library(e1071)
 library(viridis)
 library(tidyr)
@@ -34,18 +29,16 @@ library(maptools)
 library(RColorBrewer)
 library(rgl)
 
+
 ### data initial loading
 model_dir = "models"
 data_dir = "data"
-map_dir = "map"
-saved_maps = list.files(map_dir)
 
 ### load data
 data_initial=read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
-### load map
-for(file in saved_maps) {
-  load(paste(map_dir,file,sep="/"))
-}
+
+tormap <- get_map(location =c(left=-79.8129, bottom=43.4544, right=-78.9011, top=43.9132))
+torontoMap <- ggmap(tormap)
 ### load neighbourhood
 shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
 sh <- readShapePoly(shpfile)
@@ -287,7 +280,7 @@ shinyServer(function(input, output,session) {
         scale_x_discrete(expand = c(0, 0)) +
         scale_y_discrete(expand = c(0, 0)) +
         theme_minimal() +
-        theme(legend.position = "none",axis.ticks = element_blank(), axis.text.x = element_text(size = base_size *0.8, angle = 330, hjust = 0, colour = "grey50"))
+        theme(legend.position = "none",axis.ticks = element_blank(), axis.text.x = element_text(size = base_size *0.8, angle = 270, hjust = 0, colour = "grey30"),axis.text.y = element_text(size = base_size *0.5,colour = "grey30"))
     
   })
   

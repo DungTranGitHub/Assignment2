@@ -45,7 +45,7 @@ body <- dashboardBody(
                   ),
                   
                   box(
-                    title = "Toronto Location Heatmap",  width = 12, height = 450, solidHeader = TRUE, status = "primary",
+                    title = "Toronto Location Heatmap",  width = 12, height = 500, solidHeader = TRUE, status = "primary",
                     plotOutput("torontoHeatmap")
                   )
               )
@@ -82,17 +82,17 @@ body <- dashboardBody(
             fluidRow(
               ## Row 1
               box(title = "Knowing your neighbourhood", width = 12, solidHeader = TRUE, status = "primary",
-                  box(width = 4,
+                  box(width = 3,
                       selectInput("neighbourhood",
                                   "Neighbourhood to explore:",
                                   choices = NULL, selectize = FALSE)
                   ),
-                  box(width = 4,
+                  box(width = 3,
                       selectInput("typeOfCrime", "Type of Crime",
                                   choices = c("All", "Assault","Break and Enter", "Robbery", "Theft Over", "Auto Theft" )
                       )
                   ),
-                  box(width = 4,
+                  box(width = 3,
                       selectInput("occurredYear", "Occurrence Year",
                                   choices = list("All", 2017, 2016, 2015, 2014),
                                   selected = "All"
@@ -139,32 +139,32 @@ body <- dashboardBody(
                       )
                   ),
                   box(
-                    title = "kMean Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    title = "kMean Clustering", width = 12, height = 620, solidHeader = TRUE, status = "primary",
                     box(
-                      title = "Determine number of clusters", width = 4,height = 530, status = "warning",
+                      title = "Determine number of clusters", width = 3,height = 550, status = "warning",
                       plotOutput("kMeanElbow")
                     ),
                     box(
-                      title = "2D kMean Clustering", width = 4,height = 530, status = "warning",
+                      title = "2D kMean Clustering", width = 4,height = 550, status = "warning",
                       plotOutput("2DkMeanCluster")
                     ),
                     box(
-                      title = "3D kMean Clustering", width = 4,height = 530, status = "warning",
+                      title = "3D kMean Clustering", width = 5,height = 550, status = "warning",
                       rglwidgetOutput("3DkMeanCluster")
                     )
                   ),
                   box(
-                    title = "Hierarchical Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    title = "Hierarchical Clustering", width = 12, height = 620, solidHeader = TRUE, status = "primary",
                     box(
-                      title = "Hiearchical Cluster Diagram", width = 4,height = 530, status = "warning",
+                      title = "Hiearchical Cluster Diagram", width = 3,height = 550, status = "warning",
                       plotOutput("clusterDiagram")
                     ),
                     box(
-                      title = "2D Hierarchical Clustering", width = 4,height = 530, status = "warning",
+                      title = "2D Hierarchical Clustering", width = 4,height = 550, status = "warning",
                       plotOutput("2DHierarchicalCluster")
                     ),
                     box(
-                      title = "3D Hierarchichal Clustering", width = 4,height = 530, status = "warning",
+                      title = "3D Hierarchichal Clustering", width = 5,height = 550, status = "warning",
                       rglwidgetOutput("3DHierarchicalCluster")
                     )
                   )
@@ -196,17 +196,17 @@ body <- dashboardBody(
                       
                   ),
                   box(
-                    title = "Hotspot Clustering", width = 12, height = 600, solidHeader = TRUE, status = "primary",
+                    title = "Hotspot Clustering", width = 12, height = 620, solidHeader = TRUE, status = "primary",
                     box(
-                      title = "Determine number of clusters", width = 4,height = 530, status = "warning",
+                      title = "Determine number of clusters", width = 3,height = 550, status = "warning",
                       plotOutput("hotspotElbow")
                     ),
                     box(
-                      title = "2D kMean Clustering", width = 4,height = 530, status = "warning",
+                      title = "2D kMean Clustering", width = 4,height = 550, status = "warning",
                       plotOutput("2DHotspotCluster")
                     ),
                     box(
-                      title = "3D kMean Clustering", width = 4,height = 530, status = "warning",
+                      title = "3D kMean Clustering", width = 5,height = 550, status = "warning",
                       rglwidgetOutput("3DHotspotCluster")
                     )
                   )
