@@ -25,6 +25,10 @@ body <- dashboardBody(
     tabItem(tabName = "toronto",
             ## Section 1
             fluidRow(
+              box(title = "Report", width = 12, solidHeader = TRUE, status = "warning",
+                  strong("Please click ",
+                         tags$a(href='reportForHtml.html',' here', target='blank'), " to view Toronto Crimes project's report.")
+              ),
               box(title = "Toronto Crime Overview", width = 12, solidHeader = TRUE, status = "primary",
                   box(
                     title = "Toronto By MCI", width = 6, height = 550, status = "primary",
