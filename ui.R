@@ -27,7 +27,7 @@ body <- dashboardBody(
             fluidRow(
               box(title = "Report", width = 12, solidHeader = TRUE, status = "warning",
                   strong("Please click ",
-                         tags$a(href='reportForHtml.html',' here', target='blank'), " to view Toronto Crimes project's report.")
+                         tags$a(href='report.html',' here', target='blank'), " to view Toronto Crimes project's report.")
               ),
               box(title = "Toronto Crime Overview", width = 12, solidHeader = TRUE, status = "primary",
                   box(
