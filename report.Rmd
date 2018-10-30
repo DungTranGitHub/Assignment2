@@ -62,7 +62,7 @@ The RShiny app is located at the following link: [link here](link here).
 
 ## II. Business Understanding
 
-The [Toronto Police Service](https://en.wikipedia.org/wiki/Toronto_Police_Service) is the police force that serves the Greater Toronto Area. It is the largest municipal police force in Canada and the third largest police force in Canada. They are a taxpayer-funded service, ranking as second for the government of Toronto's budgetary expenses. There is always 
+The [Toronto Police Service](https://en.wikipedia.org/wiki/Toronto_Police_Service) is the police force that serves the Greater Toronto Area. It is the largest municipal police force in Canada and the third largest police force in Canada. They are a taxpayer-funded service, ranking as second for the government of Toronto's budgetary expenses. 
 
 The objective of this model is to cluster crimes to determine which areas of Toronto have the most levels of crime, overall and for different Major Crime Indicators. This would enable the Toronto Police to most effectively allocate their officers and specialists to the areas that require them the most. The hope is that this would be an effective way to lower crime rates and enable more cases to be solved, all without spending more money.
 
@@ -457,8 +457,8 @@ counts <- sapply(2:6, function(ncl) eclust(hood, "hclust", k = ncl, hc_metric = 
 names(counts) <- 2:6
 counts
 ```
-S
-till, we can see that 3 clusters are not bad if we consider only the cluster size as the criteria for choosing the number of clusters. We don't want to split the neighborhoods into clusters with a small number of neighborhoods.
+
+Still, we can see that 3 clusters are not bad if we consider only the cluster size as the criteria for choosing the number of clusters. We don't want to split the neighborhoods into clusters with a small number of neighborhoods.
 
 Now that we have chosen the number of clusters, we proceed to the clustering process. As previously in k-means, we look at Silhouette width as a quantitative measure to evaluate the clustering quality. To visually inspect the clusters, we plot dendrograms.
 
@@ -663,6 +663,8 @@ As with other data products, maintenance is expected to some extent to keep the 
 (2) Collect more features and experiment if additional features could further drive up clustering quality, or prediction accuracy in case that the clustering is used as a preprocessing step for predictive analysis;   
 (3) Establish a way to evaluate the source of data inconsistencies during data collection activities;   
 (4) Rerun modeling in a timely manner.
+
+However, we don't need to worry about scaling.
 
 ## VIII. Conclusions
 
