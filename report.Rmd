@@ -577,5 +577,16 @@ Again, it's not entirely obvious how each cluster differs from one another. Howe
 Throughout the clustering analysis in part V, we have evaluate the clustering quality by ploting visual representations of the clustering and by ploting the silhouette plot. As a short summary, using police-division-based aggregation and neighborhood-based aggregation both produced clustering results where we can spot a pattern in the clustering. Yet police-division-based aggregation seems to provide a higher quality of clustering. The other two clustering strategies that we have used, on the other hand, are not so informative, at least not from what we can tell immediately. 
 
 ## VII. Deployment
+An R Shiny dashboard was created and [uploaded to shinyapps](https://tallmachinelearning.shinyapps.io/TorontoCrime/).
+
+However, from what we understand from the data, the clustering activities are best served as 
+(1) A preprocessing step for predictive analysis, which reduces the dimensions of the data and eleviate the problem of "dimensionality curse";
+(2) Exploratory activities to help us understand the data. We have produced a very informative Rshiny app which would be very interesting to those who is eager to know the crime levels and statistics in Toronto city (for example, those who is looking to buy or rent properties). The app itself can be deployed to interesting reader without much concerns regarding scaling and ect. 
+
+However, as with other data products, maintainence is expected to some extent to keep the data and analysis updated. The following steps are identified:
+(1) Collect data on an on-going basis;   
+(2) Collect more features and experiment if additional features could furthur drive up clustering quality, or prediction accuracy in case that the clustering is used as a preprocessing step for predictive analysis;   
+(3) Establish a way to evaluate source of data inconsistencies during data collection activities;   
+(4) Rerun modelling on a timely manner.
 
 ## VIII. Conclusions
