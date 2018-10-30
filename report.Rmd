@@ -532,13 +532,17 @@ data_fullclust$reportedtime = as.numeric(data_fullclust$reportedtime)
 ```
 However, one important distinction as compared to previous clustering analysises is that, we now have mixed data type, being numeric and categorical. To handle this situation, we have experimented daisy and Gower's distance formula. However, Gower's distance formula drastically increase memory consumption when the dataset is large, making it not pratical to run on our own computers. As such, we swtiched to another algorithms "k-prototypes clustering" that can handle mixed type data. As in kmeans, we determine the number of clusters based on the trends shown in within cluster sum of squares.
 ```{r}
-library(rlist)
-set.seed(1234)
-kproto_clusters = list()
-for (i in seq(2,8,1)) {
-  kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
+if (file.exists(paste(model_dir,"kproto_clusters.dat",sep="/"))) {
+  kproto_clusters = load(paste(model_dir,"kproto_clusters.dat",sep="/"))
+} else {
+  library(rlist)
+  set.seed(1234)
+  kproto_clusters = list()
+  for (i in seq(2,8,1)) {
+    kproto_clusters = list.append(kproto_clusters,kproto(data_fullclust,i,lambda = 1))
+  }
+  save(kproto_clusters,file=paste(model_dir,"kproto_clusters.dat",sep="/"))
 }
-
 ```
 
 ```{r}
@@ -546,7 +550,7 @@ wss = c()
 for(kc in kproto_clusters) {
   wss = c(wss,kc$tot.withinss)
 }
-plot(seq(2,10,1),wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
+plot(seq(2,8,1),wss, type="b", xlab="Number of Clusters",ylab="Within groups sum of squares")
 ```
 We see here that, beyond 4 clusters (or 7 clusters), there seems to be diminishing returns in reducing within-cluster sum of squres. We choose 4 clusters in this case. Then plot the clustering results on a map:
 ```{r}
@@ -577,16 +581,17 @@ Again, it's not entirely obvious how each cluster differs from one another. Howe
 Throughout the clustering analysis in part V, we have evaluate the clustering quality by ploting visual representations of the clustering and by ploting the silhouette plot. As a short summary, using police-division-based aggregation and neighborhood-based aggregation both produced clustering results where we can spot a pattern in the clustering. Yet police-division-based aggregation seems to provide a higher quality of clustering. The other two clustering strategies that we have used, on the other hand, are not so informative, at least not from what we can tell immediately. 
 
 ## VII. Deployment
-An R Shiny dashboard was created and [uploaded to shinyapps](https://tallmachinelearning.shinyapps.io/TorontoCrime/).
+An R Shiny dashboard was created and [uploaded to shinyapps](https://tallmachinelearning.shinyapps.io/TorontoCrime/). We have produced this very informative Rshiny app which would be very interesting to those who is eager to know the crime levels and statistics in Toronto city (for example, those who is looking to buy or rent properties). The app itself can be readily deployed to interesting readers without much concerns regarding scaling since the dataset collected (or crime reported) are relatively limited in size unless much richer dimensions are introduced to the data collecting activities.
 
-However, from what we understand from the data, the clustering activities are best served as 
-(1) A preprocessing step for predictive analysis, which reduces the dimensions of the data and eleviate the problem of "dimensionality curse";
-(2) Exploratory activities to help us understand the data. We have produced a very informative Rshiny app which would be very interesting to those who is eager to know the crime levels and statistics in Toronto city (for example, those who is looking to buy or rent properties). The app itself can be deployed to interesting reader without much concerns regarding scaling and ect. 
-
-However, as with other data products, maintainence is expected to some extent to keep the data and analysis updated. The following steps are identified:
+As with other data products, maintenance is expected to some extent to keep the data and analysis updated. The following steps are identified:
 (1) Collect data on an on-going basis;   
-(2) Collect more features and experiment if additional features could furthur drive up clustering quality, or prediction accuracy in case that the clustering is used as a preprocessing step for predictive analysis;   
-(3) Establish a way to evaluate source of data inconsistencies during data collection activities;   
-(4) Rerun modelling on a timely manner.
+(2) Collect more features and experiment if additional features could further drive up clustering quality, or prediction accuracy in case that the clustering is used as a preprocessing step for predictive analysis;   
+(3) Establish a way to evaluate the source of data inconsistencies during data collection activities;   
+(4) Rerun modeling in a timely manner.
+However, we don't think we need to worry about scaling 
 
 ## VIII. Conclusions
+From what we understand from the data, the clustering activities are best served as 
+(1) A preprocessing step for predictive analysis, which reduces the dimensions of the data and alleviate the problem of "dimensionality curse";
+(2) Exploratory activities to help us understand the data. 
+For this specific task on Toronto's crime statistics, one can readily recognize clusters based on how many offenses happened in each neighborhood or in each police division. Simple clustering algorithms such as k-means or hierarchical clustering help with recognizing and visualizing such clusters.
