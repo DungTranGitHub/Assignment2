@@ -25,6 +25,7 @@ library(maps)
 library(reshape2)
 library(scales)
 library(lubridate)
+library(rgdal)
 library(maptools)
 library(RColorBrewer)
 library(rgl)
@@ -41,7 +42,7 @@ tormap <- get_map(location =c(left=-79.8129, bottom=43.4544, right=-78.9011, top
 torontoMap <- ggmap(tormap)
 ### load neighbourhood
 shpfile <- paste(data_dir,"NEIGHBORHOODS_WGS84_2.shp",sep="/")
-sh <- readShapePoly(shpfile)
+sh <- rgdal::readOGR(shpfile)
 sh@data$AREA_S_CD <- as.integer(sh@data$AREA_S_CD)
 
 ### declare local variables
