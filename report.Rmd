@@ -42,14 +42,12 @@ library(rgl)
 
 model_dir = "models"
 data_dir = "data"
-map_dir = "map"
-saved_maps = list.files(map_dir)
+
 ### Loading data
 data=read.csv(paste(data_dir,"MCI_2014_to_2017.csv",sep="/"), header = TRUE, sep = ",")
 ### Loading map
-for(file in saved_maps) {
-  load(paste(map_dir,file,sep="/"))
-}
+tormap <- get_map(location =c(left=-79.8129, bottom=43.4544, right=-78.9011, top=43.9132))
+torontoMap <- ggmap(tormap)
 ```
 
 ## I. Introduction
